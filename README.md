@@ -2,6 +2,17 @@
 
 Voice notes to your Obsidian vault, from a Seeed Studio reTerminal Sticky.
 
+> **Disclaimer.** Every line of code in this repository was written by Claude
+> (Claude Fable 5.1, with Claude Opus doing the compile-fix loop and the docs),
+> directed by a person who does not read C++ and cannot vouch for what it
+> does. It runs on a real device on my desk and has saved real notes, but
+> treat it as a hobby experiment, not a product. It drives the board's power
+> latch, the e-ink panel, and deep sleep directly, and it sends your audio to
+> whichever API you configure. Flash it at your own risk. I accept no
+> liability for bricked hardware, lost notes, surprise API bills, or anything
+> else it does or fails to do. If something looks wrong in the code, it
+> probably is; please open an issue.
+
 ## What it does
 
 Pick the device up, hold the side button, say what you are thinking, and let
