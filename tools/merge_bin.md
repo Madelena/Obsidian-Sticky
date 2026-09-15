@@ -1,12 +1,23 @@
 # Producing a single flashable image
 
 The Playground firmware page and ESP Web Tools both accept one merged image
-written at offset 0x0. After a successful `idf.py build`, run from the
-ESP-IDF PowerShell (dot-source `export.ps1` first):
+written at offset 0x0. You rarely need to do this by hand:
+`.github/workflows/release.yml` runs the same command on every `v*` tag and
+attaches the merged image, the individual binaries and the ESP Web Tools
+`manifest.json` to the GitHub Release, and publishes them to the Pages
+installer.
+
+To do it locally, after a successful `idf.py build`, run from the ESP-IDF
+PowerShell (dot-source `export.ps1` first):
 
 ```powershell
-idf.py merge-bin -o build\obsidian-sticky-merged.bin
+idf.py merge-bin -o obsidian-sticky-merged.bin
 ```
+
+The output path is relative to `build\`, not to the project root, because
+`idf.py` runs esptool with `build\` as its working directory. Passing
+`build\obsidian-sticky-merged.bin` fails with a `FileNotFoundError` for
+`build\build\...`.
 
 That writes bootloader (0x0), partition table (0x8000), the app (0x10000),
 and, when `build/font_cjk.ttf` exists, the CJK font partition (0x810000) into

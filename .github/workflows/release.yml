@@ -1,0 +1,129 @@
+# Builds the firmware in the ESP-IDF container, publishes the binaries to a
+# GitHub Release, and deploys web/ plus those binaries to GitHub Pages.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+# Pages allows one deployment at a time, and a queued release must not be
+# dropped in favour of a newer one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: espressif/idf:v5.4.4
+    steps:
+      - uses: actions/checkout@v4
+
+      # The container runs as a different user than the checkout, so git
+      # refuses the tree and idf.py cannot read the version.
+      - name: Trust the workspace
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      # export.sh is sourced in every step because the container entrypoint
+      # that normally does it is replaced by the Actions runner, and without
+      # it `pip` and `python` are not the IDF virtualenv's.
+      - name: Install font tools
+        shell: bash
+        run: . "$IDF_PATH/export.sh" && pip install fonttools brotli
+
+      # Must run before the first build: the top-level CMakeLists.txt only
+      # adds the font partition when build/font_cjk.ttf exists at configure
+      # time.
+      - name: Fetch the CJK font
+        shell: bash
+        run: . "$IDF_PATH/export.sh" && python tools/fetch_cjk_font.py
+
+      - name: Build
+        shell: bash
+        run: . "$IDF_PATH/export.sh" && idf.py build
+
+      # merge-bin runs esptool with the build directory as its working
+      # directory, so -o is relative to build/ and a "build/..." path here
+      # would fail with FileNotFoundError.
+      - name: Merge the flash image
+        shell: bash
+        run: . "$IDF_PATH/export.sh" && idf.py merge-bin -o obsidian-sticky-merged.bin
+
+      - name: Stage dist
+        shell: bash
+        run: |
+          set -eu
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            ver="${GITHUB_REF_NAME#v}"
+          else
+            ver=$(sed -n 's/^CONFIG_APP_PROJECT_VER="\(.*\)"$/\1/p' sdkconfig.defaults)
+          fi
+          echo "Version $ver"
+          mkdir -p dist
+          cp build/bootloader/bootloader.bin dist/bootloader.bin
+          cp build/partition_table/partition-table.bin dist/partition-table.bin
+          cp build/obsidian_sticky.bin dist/obsidian-sticky.bin
+          cp build/font_cjk.ttf dist/font_cjk.ttf
+          cp build/obsidian-sticky-merged.bin dist/obsidian-sticky-merged.bin
+          printf '%s' "{\"name\":\"Obsidian Sticky\",\"version\":\"$ver\",\"new_install_prompt_erase\":true,\"builds\":[{\"chipFamily\":\"ESP32-S3\",\"parts\":[{\"path\":\"bootloader.bin\",\"offset\":0},{\"path\":\"partition-table.bin\",\"offset\":32768},{\"path\":\"obsidian-sticky.bin\",\"offset\":65536},{\"path\":\"font_cjk.ttf\",\"offset\":8454144}]}]}" > dist/manifest.json
+          ls -l dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+
+  pages:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      # The manifest resolves part paths relative to itself, so the binaries
+      # sit next to index.html rather than in a subfolder.
+      - name: Assemble the site
+        run: |
+          set -eu
+          mkdir -p site
+          cp -r web/. site/
+          rm -f site/README.md
+          cp -r dist/. site/
+          ls -l site
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - id: deploy
+        uses: actions/deploy-pages@v4

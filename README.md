@@ -87,6 +87,27 @@ timeout is configurable, and setting it to 0 disables sleep entirely.
 
 ## First-time setup
 
+### Install from your browser
+
+If the firmware is not on your device yet, the quickest route is
+[the web installer](https://madelena.github.io/Obsidian-Sticky/). No toolchain,
+no downloads.
+
+1. Plug the Sticky into your computer over USB-C, using the port your system
+   lists as "CH343".
+2. Open <https://madelena.github.io/Obsidian-Sticky/> in Chrome or Edge on a
+   desktop and click **Install**. Other browsers cannot talk to USB devices.
+3. Join the open Wi-Fi network named **Sticky-Setup**.
+4. Open **http://192.168.4.1** and fill in the settings form.
+
+The web install writes the CJK font partition too, so nothing extra is needed
+for Chinese, Japanese or Korean. Every
+[GitHub Release](https://github.com/Madelena/Obsidian-Sticky/releases) also
+carries the individual `.bin` files and a merged image you can write at `0x0`
+with `esptool` yourself.
+
+### Setting the device up
+
 1. Turn the device on by pressing the side button. With no Wi-Fi configured
    it goes straight into setup mode.
 2. On your phone or laptop, join the open Wi-Fi network named
@@ -216,6 +237,17 @@ original text either way; only the screen folds.
 For Cantonese, set the `stt_lang` setting to `yue`. Groq Whisper accepts it
 as a language hint and the transcript comes back in traditional Chinese
 characters.
+
+## Publishing to the Seeed Playground
+
+The Playground firmware page has a **Submit with the form** button, which asks
+for a merged image written at `0x0` plus a name, a one-line summary, a version,
+a license (MIT here), a project page, and one photo of the device actually
+running the firmware. The merged image to upload is
+`obsidian-sticky-merged.bin` from the
+[GitHub Release](https://github.com/Madelena/Obsidian-Sticky/releases) for that
+version; it already contains the bootloader, the partition table, the app and
+the CJK font, so nothing needs to be rebuilt for the submission.
 
 ## Troubleshooting
 

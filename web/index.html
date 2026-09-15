@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Obsidian Sticky installer</title>
+<script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+<style>
+/* =============================================================================
+   INSTALLER PAGE
+   =============================================================================
+   One readable column on a light background, sized for a phone first. */
+:root {
+  color-scheme: light;
+  --ink: #1b1b1f;
+  --muted: #5c5c66;
+  --rule: #dcdce2;
+  --paper: #fdfdfd;
+}
+body {
+  margin: 0 auto;
+  padding: 2rem 1.25rem 4rem;
+  max-width: 34rem;
+  background: var(--paper);
+  color: var(--ink);
+  font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+h1 { font-size: 1.6rem; line-height: 1.2; margin: 0 0 .25rem; }
+h2 { font-size: 1.1rem; margin: 2rem 0 .5rem; }
+p { margin: 0 0 1rem; }
+.lede { color: var(--muted); }
+.install { margin: 1.5rem 0; }
+.note {
+  border-top: 1px solid var(--rule);
+  padding-top: 1rem;
+  color: var(--muted);
+  font-size: .9rem;
+}
+.warn {
+  padding: .75rem 1rem;
+  border: 1px solid var(--rule);
+  border-radius: .5rem;
+  background: #fff8e6;
+  font-size: .95rem;
+}
+ol { padding-left: 1.25rem; }
+li { margin-bottom: .5rem; }
+code {
+  background: #f0f0f4;
+  padding: .1em .35em;
+  border-radius: .25em;
+  font-size: .9em;
+}
+a { color: #2a5bd7; }
+</style>
+</head>
+<body>
+
+<h1>Obsidian Sticky installer</h1>
+<p class="lede">Flash the voice-notes firmware onto a Seeed reTerminal Sticky
+straight from this page. Version <span id="version">…</span>.</p>
+
+<div class="install">
+  <esp-web-install-button manifest="manifest.json">
+    <p slot="unsupported" class="warn">Your browser cannot talk to USB devices.
+      Open this page in Chrome or Edge on a desktop computer, with the Sticky
+      plugged in over USB-C.</p>
+    <p slot="not-allowed" class="warn">Web Serial needs a secure connection.
+      Open this page over <code>https://</code> in Chrome or Edge on a desktop
+      computer.</p>
+  </esp-web-install-button>
+</div>
+
+<h2>Four steps</h2>
+<ol>
+  <li>Plug the Sticky into your computer over USB-C. Pick the port your system
+    lists as <strong>CH343</strong> when the browser asks.</li>
+  <li>Click <strong>Install</strong> above and let it write. No button
+    combination is needed, the bridge resets the chip by itself.</li>
+  <li>On your phone or laptop, join the open Wi-Fi network named
+    <strong>Sticky-Setup</strong>.</li>
+  <li>Open <a href="http://192.168.4.1">http://192.168.4.1</a> and fill in your
+    Wi-Fi, speech-to-text and Obsidian details, then press Save and restart.</li>
+</ol>
+
+<h2>More</h2>
+<p><a href="https://github.com/Madelena/Obsidian-Sticky">Source on GitHub</a>
+  &middot;
+  <a href="https://github.com/Madelena/Obsidian-Sticky#readme">README</a></p>
+
+<p class="note">This install includes the 8 MB CJK font partition, so notes in
+Chinese, Japanese and Korean are readable on the screen. It takes the writing
+past a minute. Every GitHub Release also carries the individual
+<code>.bin</code> files and a merged image for <code>esptool</code>.</p>
+
+<script>
+// Fills the version line from the same manifest the install button reads, so
+// the two can never disagree.
+fetch("manifest.json")
+  .then(function (r) { return r.json(); })
+  .then(function (m) { document.getElementById("version").textContent = m.version; })
+  .catch(function () { document.getElementById("version").textContent = "unknown"; });
+</script>
+
+</body>
+</html>
