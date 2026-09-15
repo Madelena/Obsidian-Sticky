@@ -143,20 +143,27 @@ void process(Stage from)
             return;
         }
         s_pending_text = stt.text;
+        // Show the raw transcript right away so the user can see what was heard.
+        screen::set_note(s_pending_text);
+        screen::set_footer("Transcribed " + clock_text());
+        screen::show(s.llm_on ? "Cleaning up" : "Saving", -1, true);
 
         if (s.llm_on) {
-            screen::show("Cleaning up");
             const llm_client::Result llm = llm_client::clean(s_pending_text);
             if (llm.ok) {
                 s_pending_text = llm.text;
+                screen::set_note(s_pending_text);
+                screen::set_footer("Cleaned up " + clock_text());
+                screen::show("Saving", -1, true);
             } else {
                 screen::set_footer("Cleanup failed (" + llm.error + "), saving raw text");
+                screen::show("Saving");
                 ESP_LOGW(kTag, "Cleanup failed: %s", llm.error.c_str());
             }
         }
+    } else {
+        screen::show("Saving");
     }
-
-    screen::show("Saving");
     const obsidian_client::Result saved = obsidian_client::save(s_pending_text);
     if (!saved.ok) {
         fail(Stage::Save, "Save failed", saved.error);
@@ -290,11 +297,18 @@ void run(void *)
         }
     }
 
+    bool wifi_was_up = wifi::connected();
     while (true) {
         input::Event event = input::Event::None;
         if (!input::wait(event, pdMS_TO_TICKS(1000))) {
             if (!s_setup_mode && power::idle_expired(settings::get().sleep_min)) {
                 go_to_sleep();
+            }
+            // The boot screen is drawn before Wi-Fi is up, so refresh the
+            // indicator and address once the link state changes.
+            if (!s_setup_mode && wifi::connected() != wifi_was_up) {
+                wifi_was_up = wifi::connected();
+                screen::show(s_retry_stage == Stage::None ? "Ready" : "Retry with Down");
             }
             continue;
         }

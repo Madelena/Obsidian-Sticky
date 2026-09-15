@@ -1,11 +1,13 @@
 // =============================================================================
 // HTTP
 // =============================================================================
-// esp_http_client requests with captured bodies and the streamed WAV upload.
+// esp_http_client requests with captured bodies, redirect following, and the
+// streamed WAV upload.
 #include "net/http.h"
 
 #include <algorithm>
 #include <cstring>
+#include <functional>
 
 #include "audio/clip.h"
 #include "esp_crt_bundle.h"
@@ -18,6 +20,7 @@ namespace {
 constexpr const char *kTag = "http";
 constexpr size_t kMaxBody = 64 * 1024;
 constexpr size_t kUploadChunk = 16 * 1024;
+constexpr int kMaxRedirects = 3;
 constexpr const char *kBoundary = "----ObsidianStickyBoundary7f3a9c";
 
 // Reads the whole response body into out, truncating at kMaxBody.
@@ -45,7 +48,6 @@ esp_http_client_handle_t make_client(const std::string &url, const char *method,
     config.timeout_ms = timeout_ms;
     config.buffer_size = 4096;
     config.buffer_size_tx = 4096;
-    config.disable_auto_redirect = false;
     if (insecure_tls) {
         config.skip_cert_common_name_check = true;
     } else {
@@ -79,6 +81,49 @@ bool write_all(esp_http_client_handle_t client, const char *data, size_t length)
     return true;
 }
 
+// Returns true for a status the client should follow to its Location.
+bool is_redirect(int status)
+{
+    return status == 301 || status == 302 || status == 303 || status == 307 || status == 308;
+}
+
+// Sends the request once per hop and reads the reply, following redirects.
+// The open/write/fetch flow does not follow them by itself: 307 and 308
+// replay the body (the Periodic Notes plugin answers 307), older codes turn
+// into a GET.
+Response exchange(esp_http_client_handle_t client, size_t body_length,
+                  const std::function<bool()> &write_body)
+{
+    Response response;
+    for (int hop = 0; hop <= kMaxRedirects; ++hop) {
+        response.err = esp_http_client_open(client, body_length);
+        if (response.err == ESP_OK && body_length > 0 && !write_body()) {
+            response.err = ESP_FAIL;
+        }
+        if (response.err == ESP_OK) {
+            if (esp_http_client_fetch_headers(client) < 0) {
+                response.err = ESP_FAIL;
+            } else {
+                response.status = esp_http_client_get_status_code(client);
+                response.body.clear();
+                read_body(client, response.body);
+            }
+        }
+        esp_http_client_close(client);
+        if (response.err != ESP_OK || !is_redirect(response.status) || hop == kMaxRedirects) {
+            break;
+        }
+        if (esp_http_client_set_redirection(client) != ESP_OK) {
+            break;
+        }
+        if (response.status != 307 && response.status != 308) {
+            esp_http_client_set_method(client, HTTP_METHOD_GET);
+            body_length = 0;
+        }
+    }
+    return response;
+}
+
 }  // namespace
 
 
@@ -104,20 +149,8 @@ Response request(const char *method, const std::string &url, const std::vector<H
         response.err = ESP_ERR_NO_MEM;
         return response;
     }
-    response.err = esp_http_client_open(client, body.size());
-    if (response.err == ESP_OK && !body.empty() && !write_all(client, body.data(), body.size())) {
-        response.err = ESP_FAIL;
-    }
-    if (response.err == ESP_OK) {
-        const int64_t length = esp_http_client_fetch_headers(client);
-        if (length < 0) {
-            response.err = ESP_FAIL;
-        } else {
-            response.status = esp_http_client_get_status_code(client);
-            read_body(client, response.body);
-        }
-    }
-    esp_http_client_close(client);
+    response = exchange(client, body.size(),
+                        [&]() { return write_all(client, body.data(), body.size()); });
     esp_http_client_cleanup(client);
     ESP_LOGI(kTag, "%s %s -> %s", method, url.c_str(), response.summary().c_str());
     return response;
@@ -150,8 +183,9 @@ Response post_wav(const std::string &url, const std::vector<Header> &headers,
         response.err = ESP_ERR_NO_MEM;
         return response;
     }
-    response.err = esp_http_client_open(client, total);
-    if (response.err == ESP_OK) {
+
+    // Streams header, WAV header, PCM in chunks, and trailer from the clip.
+    auto stream_form = [&]() {
         uint8_t wav_header[clip::kWavHeaderSize];
         clip::write_wav_header(wav_header);
         const char *pcm = reinterpret_cast<const char *>(clip::samples());
@@ -161,20 +195,9 @@ Response post_wav(const std::string &url, const std::vector<Header> &headers,
         for (size_t offset = 0; sent && offset < pcm_bytes; offset += kUploadChunk) {
             sent = write_all(client, pcm + offset, std::min(kUploadChunk, pcm_bytes - offset));
         }
-        sent = sent && write_all(client, epilogue.data(), epilogue.size());
-        if (!sent) {
-            response.err = ESP_FAIL;
-        }
-    }
-    if (response.err == ESP_OK) {
-        if (esp_http_client_fetch_headers(client) < 0) {
-            response.err = ESP_FAIL;
-        } else {
-            response.status = esp_http_client_get_status_code(client);
-            read_body(client, response.body);
-        }
-    }
-    esp_http_client_close(client);
+        return sent && write_all(client, epilogue.data(), epilogue.size());
+    };
+    response = exchange(client, total, stream_form);
     esp_http_client_cleanup(client);
     ESP_LOGI(kTag, "POST wav %u bytes to %s -> %s", static_cast<unsigned>(total), url.c_str(),
              response.summary().c_str());

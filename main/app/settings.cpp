@@ -181,6 +181,7 @@ bool apply_json(const char *json, std::string &error)
     cJSON *root = cJSON_Parse(json);
     if (root == nullptr) {
         error = "Invalid JSON";
+        ESP_LOGW(kTag, "Rejected body: %.80s", json);
         return false;
     }
     Values v = get();
@@ -220,8 +221,11 @@ bool apply_json(const char *json, std::string &error)
     const esp_err_t err = save(v);
     if (err != ESP_OK) {
         error = esp_err_to_name(err);
+        ESP_LOGW(kTag, "Save failed: %s", error.c_str());
         return false;
     }
+    ESP_LOGI(kTag, "Saved, wifi=%s stt_key=%s obs_key=%s", v.wifi_ssid.c_str(),
+             v.stt_key.empty() ? "unset" : "set", v.obs_key.empty() ? "unset" : "set");
     return true;
 }
 

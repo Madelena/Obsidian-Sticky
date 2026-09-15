@@ -51,8 +51,9 @@ esp_err_t send_result(httpd_req_t *req, bool ok, const std::string &message)
 // Reads the whole request body, or returns false when it is too large.
 bool read_body(httpd_req_t *req, std::string &body)
 {
-    if (req->content_len > kMaxBody) {
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Body too large");
+    if (req->content_len == 0 || req->content_len > kMaxBody) {
+        ESP_LOGW(kTag, "Rejected body of %u bytes", static_cast<unsigned>(req->content_len));
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Body missing or too large");
         return false;
     }
     body.resize(req->content_len);
@@ -88,6 +89,8 @@ esp_err_t handle_post_settings(httpd_req_t *req)
     }
     std::string error;
     const bool ok = settings::apply_json(body.c_str(), error);
+    ESP_LOGI(kTag, "POST /api/settings: %u bytes, %s", static_cast<unsigned>(body.size()),
+             ok ? "saved" : error.c_str());
     return send_result(req, ok, ok ? "Saved" : error);
 }
 
