@@ -20,6 +20,7 @@
 #include "net/llm_client.h"
 #include "net/obsidian_client.h"
 #include "net/stt_client.h"
+#include "ui/screen.h"
 
 extern const char index_html_start[] asm("_binary_index_html_start");
 extern const char index_html_end[] asm("_binary_index_html_end");
@@ -123,6 +124,20 @@ esp_err_t handle_test(httpd_req_t *req)
     return send_result(req, ok, message);
 }
 
+// Shows posted UTF-8 text as the note, for checking fonts and layout from a
+// computer without recording anything.
+esp_err_t handle_show(httpd_req_t *req)
+{
+    std::string body;
+    if (!read_body(req, body)) {
+        return ESP_FAIL;
+    }
+    screen::set_note(body);
+    screen::set_footer("Preview from the settings page");
+    screen::show("Preview", -1, true);
+    return send_result(req, true, "Shown");
+}
+
 esp_err_t handle_reboot(httpd_req_t *req)
 {
     send_result(req, true, "Restarting");
@@ -156,7 +171,7 @@ esp_err_t start(bool captive)
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     // Test routes run TLS clients inside the handler.
     config.stack_size = 16384;
-    config.max_uri_handlers = 8;
+    config.max_uri_handlers = 10;
     config.lru_purge_enable = true;
     // Phones on the captive hotspot open many probe connections; drop idle
     // ones quickly so the page's own requests always find a free socket.
@@ -172,6 +187,7 @@ esp_err_t start(bool captive)
         {"/api/settings", HTTP_POST, handle_post_settings, nullptr},
         {"/api/test/*", HTTP_POST, handle_test, nullptr},
         {"/api/reboot", HTTP_POST, handle_reboot, nullptr},
+        {"/api/show", HTTP_POST, handle_show, nullptr},
     };
     for (const httpd_uri_t &route : routes) {
         httpd_register_uri_handler(s_server, &route);

@@ -8,8 +8,12 @@ ESP-IDF PowerShell (dot-source `export.ps1` first):
 idf.py merge-bin -o build\obsidian-sticky-merged.bin
 ```
 
-That writes bootloader (0x0), partition table (0x8000), and the app (0x10000)
-into one file using the flash mode and size from `sdkconfig`. Flash it with:
+That writes bootloader (0x0), partition table (0x8000), the app (0x10000),
+and, when `build/font_cjk.ttf` exists, the CJK font partition (0x810000) into
+one file using the flash mode and size from `sdkconfig`. Run
+`python tools/fetch_cjk_font.py` before building if you want the font in the
+merged image; without it the image is the same as before and non-Latin
+characters fall back to ASCII. Flash it with:
 
 ```powershell
 python -m esptool --chip esp32s3 --port COM3 write_flash 0x0 build\obsidian-sticky-merged.bin

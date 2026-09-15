@@ -8,7 +8,9 @@
 #include <cstring>
 
 #include "esp_heap_caps.h"
+#include "ui/cjk_font.h"
 #include "ui/font.h"
+#include "ui/text.h"
 
 namespace canvas {
 namespace {
@@ -16,7 +18,9 @@ namespace {
 uint8_t *s_buffer = nullptr;
 
 // Sets one pixel; a set bit is white on this panel, so black clears it.
-inline void set_pixel(int x, int y, bool black)
+// The public set_pixel below forwards here so the fill and text loops keep
+// inlining it at -Og.
+inline void put_pixel(int x, int y, bool black)
 {
     if (x < 0 || y < 0 || x >= kWidth || y >= kHeight) {
         return;
@@ -50,6 +54,14 @@ esp_err_t init()
 }
 
 
+void set_pixel(int x, int y, bool black)
+{
+    if (s_buffer != nullptr) {
+        put_pixel(x, y, black);
+    }
+}
+
+
 const uint8_t *data()
 {
     return s_buffer;
@@ -75,7 +87,7 @@ void fill_rect(int x, int y, int width, int height, bool black)
     const int y1 = std::min(kHeight, y + height);
     for (int row = y0; row < y1; ++row) {
         for (int column = x0; column < x1; ++column) {
-            set_pixel(column, row, black);
+            put_pixel(column, row, black);
         }
     }
 }
@@ -87,8 +99,15 @@ int draw_text(const Font &font, int x, int y, const char *text, bool black)
         return x;
     }
     int pen = x;
-    for (; *text != '\0'; ++text) {
-        const FontGlyph &glyph = font::glyph(font, *text);
+    size_t pos = 0;
+    uint32_t code_point = 0;
+    while ((code_point = text::next_code_point(text, pos)) != 0) {
+        if (code_point >= 0x80 && cjk_font::has_glyph(code_point)) {
+            cjk_font::draw(code_point, pen, y, font, black);
+            pen += cjk_font::advance(code_point, font);
+            continue;
+        }
+        const FontGlyph &glyph = font::glyph(font, static_cast<char>(code_point));
         const int row_bytes = (glyph.width + 7) / 8;
         const uint8_t *rows = font.bitmap + glyph.offset;
         const int left = pen + glyph.x_offset;
@@ -96,7 +115,7 @@ int draw_text(const Font &font, int x, int y, const char *text, bool black)
             const uint8_t *bits = rows + row * row_bytes;
             for (int column = 0; column < glyph.width; ++column) {
                 if (bits[column >> 3] & (0x80U >> (column & 7))) {
-                    set_pixel(left + column, y + row, black);
+                    put_pixel(left + column, y + row, black);
                 }
             }
         }

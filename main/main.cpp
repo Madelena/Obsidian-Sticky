@@ -17,6 +17,7 @@
 #include "net/wifi.h"
 #include "nvs_flash.h"
 #include "ui/canvas.h"
+#include "ui/cjk_font.h"
 #include "ui/display.h"
 #include "ui/screen.h"
 
@@ -59,6 +60,9 @@ extern "C" void app_main()
     }
 
     ESP_ERROR_CHECK(canvas::init());
+    // A missing or empty font partition only costs non-Latin glyphs, so this
+    // result never stops the boot.
+    cjk_font::init();
     ESP_ERROR_CHECK(display::init());
     if (battery::init(board::sensor_i2c_bus()) != ESP_OK) {
         ESP_LOGW(kTag, "Battery gauge unavailable");

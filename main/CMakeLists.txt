@@ -14,6 +14,7 @@ idf_component_register(
         "ui/font.cpp"
         "ui/text.cpp"
         "ui/canvas.cpp"
+        "ui/cjk_font.cpp"
         "ui/display.cpp"
         "ui/screen.cpp"
         "net/wifi.cpp"
@@ -29,7 +30,8 @@ idf_component_register(
     INCLUDE_DIRS "."
     EMBED_TXTFILES "portal/index.html"
     REQUIRES
-        bq27220 button seeed_epaper dns_server
+        bq27220 button seeed_epaper dns_server stb_truetype
+        esp_partition spi_flash
         esp_driver_gpio esp_driver_i2c esp_driver_i2s esp_driver_ledc esp_driver_spi
         esp_hw_support esp_timer esp_app_format nvs_flash json
         esp_wifi esp_netif esp_event esp_http_client esp_http_server esp-tls mbedtls

@@ -49,7 +49,7 @@ const Font &note_face()
 void draw_status(const std::string &status, int level)
 {
     canvas::fill_rect(0, 0, canvas::kWidth, kStatusHeight, false);
-    canvas::draw_text(font::title(), kMargin, 18, text::fold_to_ascii(status).c_str());
+    canvas::draw_text(font::title(), kMargin, 18, text::prepare(status).c_str());
     canvas::fill_rect(kMargin, kStatusHeight - 2, canvas::kWidth - 2 * kMargin, 2);
 
     if (level >= 0) {
@@ -73,7 +73,7 @@ void draw_note()
 {
     const Font &face = note_face();
     const int width = canvas::kWidth - 2 * kMargin;
-    const std::vector<std::string> lines = text::wrap(face, text::fold_to_ascii(s_note), width);
+    const std::vector<std::string> lines = text::wrap(face, text::prepare(s_note), width);
     const int pitch = face.line_height;
     const int per_page = (kBodyBottom - kBodyTop) / pitch;
     s_pages = (static_cast<int>(lines.size()) + per_page - 1) / per_page;
@@ -95,7 +95,7 @@ void draw_note()
 void draw_footer()
 {
     canvas::fill_rect(kMargin, kFooterTop, canvas::kWidth - 2 * kMargin, 1);
-    canvas::draw_text(font::small(), kMargin, kFooterTop + 16, text::fold_to_ascii(s_footer).c_str());
+    canvas::draw_text(font::small(), kMargin, kFooterTop + 16, text::prepare(s_footer).c_str());
     std::string right = std::string("v") + esp_app_get_description()->version + "  " + wifi::ip();
     if (s_pages > 1) {
         right = "Page " + std::to_string(s_page + 1) + "/" + std::to_string(s_pages) + "   " + right;
@@ -156,12 +156,12 @@ bool scroll(int delta)
 void show_message(const std::string &title, const std::vector<std::string> &lines)
 {
     canvas::clear();
-    canvas::draw_text(font::title(), kMargin, 18, text::fold_to_ascii(title).c_str());
+    canvas::draw_text(font::title(), kMargin, 18, text::prepare(title).c_str());
     canvas::fill_rect(kMargin, kStatusHeight - 2, canvas::kWidth - 2 * kMargin, 2);
     int y = kBodyTop;
     const int width = canvas::kWidth - 2 * kMargin;
     for (const std::string &line : lines) {
-        for (const std::string &wrapped : text::wrap(font::body(), text::fold_to_ascii(line), width)) {
+        for (const std::string &wrapped : text::wrap(font::body(), text::prepare(line), width)) {
             if (y > kBodyBottom - font::body().height) {
                 break;
             }

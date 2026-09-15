@@ -78,6 +78,12 @@ timeout is configurable, and setting it to 0 disables sleep entirely.
   and on the same network as the Sticky. The device talks to your vault
   directly over the LAN. There is no cloud service in between.
 - A 2.4 GHz Wi-Fi network. The ESP32-S3 has no 5 GHz radio.
+- Optionally, the Chinese font partition, if you want notes in Chinese,
+  Japanese or Korean to be readable on the screen. It is one extra build step
+  and one extra flash, described in
+  [Chinese and other scripts](#chinese-and-other-scripts) below. Without it
+  the firmware still works and still saves those notes correctly to Obsidian;
+  only the screen falls back to ASCII.
 
 ## First-time setup
 
@@ -108,6 +114,12 @@ The settings page keeps running after setup. Once the device is on your
 network, open the address shown on the info screen (press Up) in a browser to
 change anything without going back to setup mode. Saved API keys are never
 sent back to the browser, and leaving a key field blank keeps the stored one.
+The same server accepts `POST /api/show` with a plain UTF-8 body and puts that
+text on the screen, which is handy for checking fonts and layout:
+
+```
+curl -X POST http://<device-ip>/api/show --data-binary "Hello 你好"
+```
 
 ## Settings reference
 
@@ -172,6 +184,38 @@ Notes:
 - The firmware logs on UART0 through the on-board USB-serial bridge. The
   native USB-Serial-JTAG console is disabled on purpose, because those two
   pins are the microphone pins on this board.
+
+## Chinese and other scripts
+
+English and the rest of ASCII are drawn from bitmap fonts baked into the
+firmware. Everything above U+007F is drawn from a TrueType font that lives in
+its own 8 MB flash partition and is rasterized as the screen is painted, so
+Chinese, Japanese and Korean text needs that partition to be flashed.
+
+The font is Noto Sans TC, which covers traditional and simplified Chinese as
+well as kana and the common punctuation, and is not in this repository. Build
+it and flash it in two commands:
+
+```powershell
+python tools\fetch_cjk_font.py
+idf.py -p COM3 flash
+```
+
+The first command downloads the variable font from Google Fonts, pins it at
+regular weight, subsets it to the ranges the screen needs, and writes
+`build\font_cjk.ttf`, about 5.6 MB. The second flashes the firmware and the
+font together: the build only notices the file when CMake runs, so if you
+built before creating it, run `idf.py reconfigure` once. `fetch_cjk_font.py`
+needs `fonttools`, which `pip install fonttools` provides.
+
+Without the partition nothing breaks. Accented Latin letters lose their
+marks, curly quotes and dashes become ASCII ones, and anything else, Chinese
+included, shows as `?`. The note saved to your vault is always the full
+original text either way; only the screen folds.
+
+For Cantonese, set the `stt_lang` setting to `yue`. Groq Whisper accepts it
+as a language hint and the transcript comes back in traditional Chinese
+characters.
 
 ## Troubleshooting
 

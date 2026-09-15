@@ -27,6 +27,10 @@ esp_err_t init();
 // Returns the packed 1-bit buffer (1 = white, MSB first, 100-byte rows).
 const uint8_t *data();
 
+// PIXEL SETTER
+// Sets one pixel black or white, ignoring coordinates off the canvas.
+void set_pixel(int x, int y, bool black);
+
 // CANVAS CLEARER
 // Fills the whole buffer with white, or black when white is false.
 void clear(bool white = true);
@@ -36,8 +40,9 @@ void clear(bool white = true);
 void fill_rect(int x, int y, int width, int height, bool black = true);
 
 // TEXT DRAWER
-// Draws one line of text with its top-left at (x, y) using only black pixels,
-// leaving the background as is; returns the pen x after the last glyph.
+// Draws one line of UTF-8 text with its top-left at (x, y) using only black
+// pixels, leaving the background as is; returns the pen x after the last
+// glyph.
 int draw_text(const Font &font, int x, int y, const char *text, bool black = true);
 
 // CENTERED TEXT DRAWER
