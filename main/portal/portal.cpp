@@ -142,7 +142,7 @@ esp_err_t handle_show(httpd_req_t *req)
         return ESP_FAIL;
     }
     screen::set_note(body);
-    screen::set_caption("Preview from the settings page");
+    screen::set_caption("");
     screen::show("Preview", -1, true);
     return send_result(req, true, "Shown");
 }
