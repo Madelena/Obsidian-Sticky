@@ -28,5 +28,5 @@ For a Playground submission, follow `docs/contributing-firmware.md` in the
 and build with an explicit version so the artifact matches `firmware.json`:
 
 ```powershell
-idf.py -D PROJECT_VER=0.2.0 build
+idf.py -D PROJECT_VER=0.3.0 build
 ```
