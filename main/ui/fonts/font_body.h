@@ -658,6 +658,6 @@ static const FontGlyph font_body_glyphs[] = {
 };
 
 static const Font font_body = {
-    38, 29, 44, 32, 126,
+    38, 29, 42, 32, 126,
     font_body_glyphs, font_body_bitmap,
 };

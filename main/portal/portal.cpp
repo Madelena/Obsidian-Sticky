@@ -7,6 +7,7 @@
 #include <string>
 
 #include "app/settings.h"
+#include "board/buzzer.h"
 #include "cJSON.h"
 // dns_server.h names esp_ip4_addr_t without including what defines it.
 #include "esp_netif.h"
@@ -98,6 +99,14 @@ esp_err_t handle_post_settings(httpd_req_t *req)
     }
     std::string error;
     const bool ok = settings::apply_json(body.c_str(), error);
+    if (ok) {
+        buzzer::set_enabled(settings::get().beep);
+        // A text size change should show at once, but not over the setup
+        // screen, which is a show_message screen with no note behind it.
+        if (!s_captive) {
+            screen::refresh();
+        }
+    }
     ESP_LOGI(kTag, "POST /api/settings: %u bytes, %s", static_cast<unsigned>(body.size()),
              ok ? "saved" : error.c_str());
     return send_result(req, ok, ok ? "Saved" : error);

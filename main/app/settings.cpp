@@ -42,7 +42,7 @@ Values defaults()
     v.obs_mode = "daily";
     v.obs_folder = "Inbox";
     v.obs_line = "- **{time}** {text}";
-    v.note_size = "large";
+    v.text_size = "medium";
     v.tz = "EST5EDT,M3.2.0,M11.1.0";
     return v;
 }
@@ -62,7 +62,7 @@ constexpr StringField kStrings[] = {
     {"llm_prompt", &Values::llm_prompt, false}, {"obs_url", &Values::obs_url, false},
     {"obs_key", &Values::obs_key, true},       {"obs_mode", &Values::obs_mode, false},
     {"obs_folder", &Values::obs_folder, false}, {"obs_line", &Values::obs_line, false},
-    {"tz", &Values::tz, false},           {"note_size", &Values::note_size, false},
+    {"tz", &Values::tz, false},           {"text_size", &Values::text_size, false},
 };
 
 // Reads one NVS string into dest, leaving dest alone when the key is absent.
@@ -110,6 +110,12 @@ esp_err_t init()
         nvs_close(handle);
     } else if (err != ESP_ERR_NVS_NOT_FOUND) {
         return err;
+    }
+    // A size another firmware wrote has no face here, so it falls back rather
+    // than leaving screen.cpp note_face() to guess.
+    if (loaded.text_size != "small" && loaded.text_size != "medium" &&
+        loaded.text_size != "large" && loaded.text_size != "xlarge") {
+        loaded.text_size = "medium";
     }
     std::lock_guard<std::mutex> lock(s_mutex);
     s_values = loaded;
@@ -219,9 +225,9 @@ bool apply_json(const char *json, std::string &error)
         error = "obs_mode must be daily or note";
         return false;
     }
-    if (v.note_size != "small" && v.note_size != "medium" && v.note_size != "large" &&
-        v.note_size != "xlarge") {
-        error = "note_size must be small, medium, large or xlarge";
+    if (v.text_size != "small" && v.text_size != "medium" && v.text_size != "large" &&
+        v.text_size != "xlarge") {
+        error = "text_size must be small, medium, large or xlarge";
         return false;
     }
     if (v.llm_kind != "anthropic" && v.llm_kind != "openai") {

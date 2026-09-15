@@ -1566,6 +1566,6 @@ static const FontGlyph font_xlarge_glyphs[] = {
 };
 
 static const Font font_xlarge = {
-    66, 50, 76, 32, 126,
+    66, 50, 73, 32, 126,
     font_xlarge_glyphs, font_xlarge_bitmap,
 };

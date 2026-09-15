@@ -2,7 +2,7 @@
 // SCREEN
 // =============================================================================
 // Layout of the status band, optional caption, and paged note body on the
-// 800x480 canvas. The note face comes from the note_size setting in
+// 800x480 canvas. The note face comes from the text_size setting in
 // settings.cpp.
 #include "ui/screen.h"
 
@@ -37,16 +37,17 @@ int s_pages = 1;
 // Picks the note face from the user's size setting.
 const Font &note_face()
 {
-    const std::string size = settings::get().note_size;
+    const std::string size = settings::get().text_size;
     if (size == "small") {
-        return font::small();
-    }
-    if (size == "medium") {
         return font::body();
     }
-    if (size == "xlarge") {
+    if (size == "large") {
         return font::xlarge();
     }
+    if (size == "xlarge") {
+        return font::xxlarge();
+    }
+    // "medium" and anything unrecognized share the 40 px default face.
     return font::large();
 }
 
@@ -154,6 +155,15 @@ void show(const std::string &status, int level, bool full)
     } else {
         display::refresh_partial();
     }
+}
+
+
+void refresh()
+{
+    // draw_all reflows the note first, so draw_note clamps s_page to the page
+    // count the new face gives before the status band reports it.
+    draw_all(-1);
+    display::refresh_full();
 }
 
 

@@ -409,6 +409,6 @@ static const FontGlyph font_small_glyphs[] = {
 };
 
 static const Font font_small = {
-    28, 21, 32, 32, 126,
+    28, 21, 31, 32, 126,
     font_small_glyphs, font_small_bitmap,
 };

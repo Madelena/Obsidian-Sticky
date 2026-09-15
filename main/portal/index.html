@@ -71,7 +71,7 @@
 
   <fieldset>
     <legend>Device</legend>
-    <label>Note text size<select id="note_size"><option value="small">Small (22 px, about 11 lines)</option><option value="medium">Medium (30 px, about 8 lines)</option><option value="large">Large (40 px, about 6 lines)</option><option value="xlarge">Extra large (52 px, about 4 lines)</option></select></label>
+    <label>Note text size<select id="text_size"><option value="small">Small (30 px, about 8 lines)</option><option value="medium">Medium (40 px, about 6 lines)</option><option value="large">Large (52 px, about 4 lines)</option><option value="xlarge">Extra large (64 px, about 4 lines)</option></select></label>
     <p class="hint">Longer notes are paged; press Up and Down on the device to scroll.</p>
     <label>Time zone (POSIX TZ)<input id="tz"></label>
     <label>Sleep after idle minutes (0 = never)<input id="sleep_min" type="number" min="0"></label>
@@ -85,7 +85,7 @@
   </div>
 </main>
 <script>
-const text = ["wifi_ssid","stt_url","stt_model","stt_lang","llm_kind","llm_url","llm_model","llm_prompt","obs_url","obs_mode","obs_folder","obs_line","tz","note_size"];
+const text = ["wifi_ssid","stt_url","stt_model","stt_lang","llm_kind","llm_url","llm_model","llm_prompt","obs_url","obs_mode","obs_folder","obs_line","tz","text_size"];
 const secret = ["wifi_pass","stt_key","llm_key","obs_key"];
 const el = id => document.getElementById(id);
 const say = (id, ok, msg) => { const m = el(id); m.textContent = msg; m.className = "msg " + (ok ? "ok" : "bad"); };

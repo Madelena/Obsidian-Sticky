@@ -142,7 +142,7 @@ curl -X POST http://<device-ip>/api/show --data-binary "Hello 你好"
 | `obs_mode` | `daily` | `daily` appends a line to today's daily note. `note` creates a new file. |
 | `obs_folder` | `Inbox` | Vault folder for new notes. Used only in `note` mode. Empty puts notes at the vault root. |
 | `obs_line` | `- **{time}** {text}` | Template for the daily-note line. `{time}` becomes `HH:MM` and `{text}` becomes the transcript with newlines flattened to spaces. Used only in `daily` mode. |
-| `note_size` | `large` | Note text size on the screen: `small` (22 px, about 11 lines per page), `medium` (30 px, about 8), `large` (40 px, about 6), or `xlarge` (52 px, about 4). |
+| `text_size` | `medium` | Note text size on the screen: `small` (30 px, about 8 lines per page), `medium` (40 px, about 6), `large` (52 px, about 4), or `xlarge` (64 px, about 4). |
 | `tz` | `EST5EDT,M3.2.0,M11.1.0` | POSIX TZ string, used for the clock, the daily-note timestamp, and new-note filenames. |
 | `sleep_min` | `10` | Idle minutes before deep sleep. 0 disables sleep. |
 | `beep` | on | Buzzer cues on record start, record stop, save, and error. |

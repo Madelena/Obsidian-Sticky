@@ -687,6 +687,6 @@ static const FontGlyph font_title_glyphs[] = {
 };
 
 static const Font font_title = {
-    38, 29, 44, 32, 126,
+    38, 29, 42, 32, 126,
     font_title_glyphs, font_title_bitmap,
 };

@@ -68,7 +68,7 @@ def main(argv):
             f.write(f"    {{{offset}, {width}, {advance}, {x_offset}}},  // '{chr(code)}'\n")
         f.write("};\n\n")
         f.write(f"static const Font {name} = {{\n")
-        f.write(f"    {height}, {ascent}, {round(height * 1.15)}, {FIRST}, {LAST},\n")
+        f.write(f"    {height}, {ascent}, {round(height * 1.10)}, {FIRST}, {LAST},\n")
         f.write(f"    {name}_glyphs, {name}_bitmap,\n}};\n")
     print(f"{out_path}: {LAST - FIRST + 1} glyphs, height {height}, {len(bitmap)} bytes")
 

@@ -991,6 +991,6 @@ static const FontGlyph font_large_glyphs[] = {
 };
 
 static const Font font_large = {
-    50, 38, 57, 32, 126,
+    50, 38, 55, 32, 126,
     font_large_glyphs, font_large_bitmap,
 };
