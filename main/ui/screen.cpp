@@ -1,8 +1,9 @@
 // =============================================================================
 // SCREEN
 // =============================================================================
-// Layout of the status band, paged note body, and footer on the 800x480
-// canvas. The note face comes from the note_size setting in settings.cpp.
+// Layout of the status band, optional caption, and paged note body on the
+// 800x480 canvas. The note face comes from the note_size setting in
+// settings.cpp.
 #include "ui/screen.h"
 
 #include <cstdio>
@@ -21,13 +22,14 @@ namespace {
 
 constexpr int kMargin = 36;
 constexpr int kStatusHeight = 76;
-constexpr int kFooterTop = 416;
+constexpr int kCaptionTop = kStatusHeight + 12;
+constexpr int kBlockGap = 6;
 constexpr int kBodyTop = kStatusHeight + 18;
-constexpr int kBodyBottom = kFooterTop - 12;
+constexpr int kBodyBottom = canvas::kHeight - 24;
 constexpr int kMeterWidth = 220;
 
 std::string s_note;
-std::string s_footer;
+std::string s_caption;
 std::string s_status;
 int s_page = 0;
 int s_pages = 1;
@@ -42,10 +44,19 @@ const Font &note_face()
     if (size == "medium") {
         return font::body();
     }
+    if (size == "xlarge") {
+        return font::xlarge();
+    }
     return font::large();
 }
 
-// Draws the status band: text left, meter or Wi-Fi and battery right.
+// Gives the note body its top edge, pushed down when a caption is showing.
+int body_top()
+{
+    return s_caption.empty() ? kBodyTop : kCaptionTop + font::small().line_height + kBlockGap;
+}
+
+// Draws the status band: text left, meter or page, Wi-Fi and battery right.
 void draw_status(const std::string &status, int level)
 {
     canvas::fill_rect(0, 0, canvas::kWidth, kStatusHeight, false);
@@ -65,8 +76,23 @@ void draw_status(const std::string &status, int level)
     std::snprintf(right, sizeof(right), "%s   %s%s", wifi::connected() ? "Wi-Fi" : "No Wi-Fi",
                   percent >= 0 ? (std::to_string(percent) + "%").c_str() : "--",
                   battery::on_usb() ? " USB" : "");
-    canvas::draw_text_right(font::small(), canvas::kWidth - kMargin, 26, right);
+    std::string line = right;
+    if (s_pages > 1) {
+        line = std::to_string(s_page + 1) + "/" + std::to_string(s_pages) + "   " + line;
+    }
+    canvas::draw_text_right(font::small(), canvas::kWidth - kMargin, 26, line.c_str());
 }
+
+
+// Draws the caption line, if there is one, just under the status separator.
+void draw_caption()
+{
+    if (s_caption.empty()) {
+        return;
+    }
+    canvas::draw_text(font::small(), kMargin, kCaptionTop, text::prepare(s_caption).c_str());
+}
+
 
 // Draws the current page of the note and records how many pages exist.
 void draw_note()
@@ -75,7 +101,8 @@ void draw_note()
     const int width = canvas::kWidth - 2 * kMargin;
     const std::vector<std::string> lines = text::wrap(face, text::prepare(s_note), width);
     const int pitch = face.line_height;
-    const int per_page = (kBodyBottom - kBodyTop) / pitch;
+    const int top = body_top();
+    const int per_page = (kBodyBottom - top) / pitch;
     s_pages = (static_cast<int>(lines.size()) + per_page - 1) / per_page;
     if (s_pages < 1) {
         s_pages = 1;
@@ -83,7 +110,7 @@ void draw_note()
     if (s_page >= s_pages) {
         s_page = s_pages - 1;
     }
-    int y = kBodyTop;
+    int y = top;
     const int first = s_page * per_page;
     for (int i = first; i < first + per_page && i < static_cast<int>(lines.size()); ++i) {
         canvas::draw_text(face, kMargin, y, lines[i].c_str());
@@ -91,25 +118,15 @@ void draw_note()
     }
 }
 
-// Draws the footer: message left, page count, version and address right.
-void draw_footer()
-{
-    canvas::fill_rect(kMargin, kFooterTop, canvas::kWidth - 2 * kMargin, 1);
-    canvas::draw_text(font::small(), kMargin, kFooterTop + 16, text::prepare(s_footer).c_str());
-    std::string right = std::string("v") + esp_app_get_description()->version + "  " + wifi::ip();
-    if (s_pages > 1) {
-        right = "Page " + std::to_string(s_page + 1) + "/" + std::to_string(s_pages) + "   " + right;
-    }
-    canvas::draw_text_right(font::small(), canvas::kWidth - kMargin, kFooterTop + 16, right.c_str());
-}
 
 // Draws every band into the canvas.
 void draw_all(int level)
 {
     canvas::clear();
+    draw_caption();
     draw_note();
+    // Last, because draw_note is what counts the pages this band reports.
     draw_status(s_status, level);
-    draw_footer();
 }
 
 }  // namespace
@@ -122,9 +139,9 @@ void set_note(const std::string &note)
 }
 
 
-void set_footer(const std::string &footer)
+void set_caption(const std::string &text)
 {
-    s_footer = footer;
+    s_caption = text;
 }
 
 
@@ -158,18 +175,23 @@ void show_message(const std::string &title, const std::vector<std::string> &line
     canvas::clear();
     canvas::draw_text(font::title(), kMargin, 18, text::prepare(title).c_str());
     canvas::fill_rect(kMargin, kStatusHeight - 2, canvas::kWidth - 2 * kMargin, 2);
+
+    // The only place the firmware version and LAN address are shown.
+    const int stamp_top = kBodyBottom - font::small().height;
     int y = kBodyTop;
     const int width = canvas::kWidth - 2 * kMargin;
     for (const std::string &line : lines) {
         for (const std::string &wrapped : text::wrap(font::body(), text::prepare(line), width)) {
-            if (y > kBodyBottom - font::body().height) {
+            if (y + font::body().height > stamp_top - kBlockGap) {
                 break;
             }
             canvas::draw_text(font::body(), kMargin, y, wrapped.c_str());
             y += font::body().line_height;
         }
     }
-    draw_footer();
+    const std::string stamp =
+        std::string("v") + esp_app_get_description()->version + "  " + wifi::ip();
+    canvas::draw_text(font::small(), kMargin, stamp_top, stamp.c_str());
     display::refresh_full();
 }
 

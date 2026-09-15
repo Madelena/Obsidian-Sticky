@@ -10,6 +10,7 @@
 #include "ui/fonts/font_large.h"
 #include "ui/fonts/font_small.h"
 #include "ui/fonts/font_title.h"
+#include "ui/fonts/font_xlarge.h"
 #include "ui/text.h"
 
 namespace font {
@@ -35,6 +36,12 @@ const Font &small()
 const Font &large()
 {
     return font_large;
+}
+
+
+const Font &xlarge()
+{
+    return font_xlarge;
 }
 
 

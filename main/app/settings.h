@@ -34,7 +34,7 @@ struct Values {
     std::string obs_folder;   // New-note mode only
     std::string obs_line;     // Daily-mode template with {time} and {text}
 
-    std::string note_size;    // "small", "medium", or "large" note text
+    std::string note_size;    // "small", "medium", "large" or "xlarge" note text
     std::string tz;           // POSIX TZ string
     int sleep_min = 10;       // Idle minutes before deep sleep, 0 disables
     bool beep = true;

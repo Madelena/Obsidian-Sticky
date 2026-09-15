@@ -40,9 +40,9 @@ constexpr const char *kTag = "cjk_font";
 // `font` row in partitions.csv.
 constexpr esp_partition_subtype_t kFontSubtype = static_cast<esp_partition_subtype_t>(0x40);
 
-// Side of the square rasterization scratch, comfortably over the 50 px tall
-// large face in ui/fonts/font_large.h.
-constexpr int kScratchDim = 80;
+// Side of the square rasterization scratch, comfortably over the 66 px tall
+// xlarge face in ui/fonts/font_xlarge.h.
+constexpr int kScratchDim = 96;
 
 constexpr uint32_t kSfntVersion = 0x00010000;  // Plain TrueType outlines
 constexpr uint32_t kTrueTag = 0x74727565;      // 'true', old Apple flavour

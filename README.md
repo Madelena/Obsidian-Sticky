@@ -31,7 +31,7 @@ device works as a sticky note on your desk until you pick it up again.
 | --- | --- |
 | Hold the side (AI) button | Starts recording. The screen shows a level meter and the elapsed time. |
 | Release the side button | Stops recording and runs transcribe, optional cleanup, and save. |
-| Press Up | Pages back through a long note. At the top of the note it shows the info screen instead: Wi-Fi network and IP, settings page address, battery, and where notes are being saved. The info screen closes on any button press, or after 12 seconds. |
+| Press Up | Pages back through a long note. At the top of the note it shows the info screen instead: Wi-Fi network and IP, settings page address, battery, where notes are being saved, and the firmware version. The info screen closes on any button press, or after 12 seconds. |
 | Press Down | Pages forward through a long note. After a failure it retries the failed stage instead: a failed transcribe retries from the audio, which is still in memory, and a failed save retries from the text, so nothing has to be spoken again. |
 | Hold Down for 3 seconds | Enters setup mode. The device stops its normal work, starts the "Sticky-Setup" Wi-Fi network, and shows the setup instructions. Holding Down again in setup mode restarts the device. |
 | Hold the side button for 5 seconds | Powers off. Press the side button again to turn it back on. |
@@ -39,7 +39,7 @@ device works as a sticky note on your desk until you pick it up again.
 Recordings shorter than about a third of a second are discarded, and a single
 recording stops at 90 seconds. The raw transcript appears on screen as soon
 as it arrives, then the cleaned version replaces it if cleanup is on. Notes
-longer than the screen are paged, with the page count in the footer.
+longer than the screen are paged, with the page count in the status band.
 
 After ten idle minutes the device goes into deep sleep and the screen keeps
 showing the last note. Press the side button to wake it. If you keep the
@@ -142,7 +142,7 @@ curl -X POST http://<device-ip>/api/show --data-binary "Hello 你好"
 | `obs_mode` | `daily` | `daily` appends a line to today's daily note. `note` creates a new file. |
 | `obs_folder` | `Inbox` | Vault folder for new notes. Used only in `note` mode. Empty puts notes at the vault root. |
 | `obs_line` | `- **{time}** {text}` | Template for the daily-note line. `{time}` becomes `HH:MM` and `{text}` becomes the transcript with newlines flattened to spaces. Used only in `daily` mode. |
-| `note_size` | `large` | Note text size on the screen: `small` (22 px, about 14 lines per page), `medium` (30 px, about 7), or `large` (40 px, about 5). |
+| `note_size` | `large` | Note text size on the screen: `small` (22 px, about 11 lines per page), `medium` (30 px, about 8), `large` (40 px, about 6), or `xlarge` (52 px, about 4). |
 | `tz` | `EST5EDT,M3.2.0,M11.1.0` | POSIX TZ string, used for the clock, the daily-note timestamp, and new-note filenames. |
 | `sleep_min` | `10` | Idle minutes before deep sleep. 0 disables sleep. |
 | `beep` | on | Buzzer cues on record start, record stop, save, and error. |

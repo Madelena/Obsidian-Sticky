@@ -219,8 +219,9 @@ bool apply_json(const char *json, std::string &error)
         error = "obs_mode must be daily or note";
         return false;
     }
-    if (v.note_size != "small" && v.note_size != "medium" && v.note_size != "large") {
-        error = "note_size must be small, medium or large";
+    if (v.note_size != "small" && v.note_size != "medium" && v.note_size != "large" &&
+        v.note_size != "xlarge") {
+        error = "note_size must be small, medium, large or xlarge";
         return false;
     }
     if (v.llm_kind != "anthropic" && v.llm_kind != "openai") {

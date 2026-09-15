@@ -29,11 +29,12 @@ namespace font {
 
 // FONT ACCESSORS
 // Return the baked faces: 30 px regular, 30 px bold, 22 px regular, 40 px
-// regular.
+// regular, 52 px regular.
 const Font &body();
 const Font &title();
 const Font &small();
 const Font &large();
+const Font &xlarge();
 
 // GLYPH LOOKUP
 // Returns the glyph for a character, or the '?' glyph when it is not encoded.

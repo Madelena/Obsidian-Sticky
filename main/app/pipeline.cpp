@@ -117,7 +117,7 @@ void capture_task(void *)
 void fail(Stage stage, const char *title, const std::string &reason)
 {
     s_retry_stage = stage;
-    screen::set_footer(reason + "  Press Down to retry.");
+    screen::set_caption(reason + "  Press Down to retry.");
     screen::show(title, -1, true);
     buzzer::cue_error();
     ESP_LOGW(kTag, "%s: %s", title, reason.c_str());
@@ -148,7 +148,7 @@ void process(Stage from)
         s_pending_text = stt.text;
         // Show the raw transcript right away so the user can see what was heard.
         screen::set_note(s_pending_text);
-        screen::set_footer("Transcribed " + clock_text());
+        screen::set_caption("");
         screen::show(s.llm_on ? "Cleaning up" : "Saving", -1, true);
 
         if (s.llm_on) {
@@ -156,10 +156,10 @@ void process(Stage from)
             if (llm.ok) {
                 s_pending_text = llm.text;
                 screen::set_note(s_pending_text);
-                screen::set_footer("Cleaned up " + clock_text());
+                screen::set_caption("");
                 screen::show("Saving", -1, true);
             } else {
-                screen::set_footer("Cleanup failed (" + llm.error + "), saving raw text");
+                screen::set_caption("Cleanup failed (" + llm.error + "), saving raw text");
                 screen::show("Saving");
                 ESP_LOGW(kTag, "Cleanup failed: %s", llm.error.c_str());
             }
@@ -176,8 +176,8 @@ void process(Stage from)
 
     s_retry_stage = Stage::None;
     screen::set_note(s_pending_text);
-    screen::set_footer("Saved " + clock_text() + " to " + saved.target);
-    screen::show("Saved", -1, true);
+    screen::set_caption("");
+    screen::show("Saved " + clock_text(), -1, true);
     buzzer::cue_saved();
     store_last_note(s_pending_text);
 }
@@ -283,7 +283,7 @@ void go_to_sleep()
 void run(void *)
 {
     screen::set_note(load_last_note());
-    screen::set_footer("");
+    screen::set_caption("");
     power::note_activity();
 
     const bool wake_recording = board::woke_from_button() && input::ai_pressed();
