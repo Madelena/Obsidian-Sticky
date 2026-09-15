@@ -1,0 +1,28 @@
+# Producing a single flashable image
+
+The Playground firmware page and ESP Web Tools both accept one merged image
+written at offset 0x0. After a successful `idf.py build`, run from the
+ESP-IDF PowerShell (dot-source `export.ps1` first):
+
+```powershell
+idf.py merge-bin -o build\obsidian-sticky-merged.bin
+```
+
+That writes bootloader (0x0), partition table (0x8000), and the app (0x10000)
+into one file using the flash mode and size from `sdkconfig`. Flash it with:
+
+```powershell
+python -m esptool --chip esp32s3 --port COM3 write_flash 0x0 build\obsidian-sticky-merged.bin
+```
+
+The CH343 bridge resets the chip into download mode by itself; if esptool
+reports "No serial data received", check that you picked the CH343 port and
+not another USB serial device.
+
+For a Playground submission, follow `docs/contributing-firmware.md` in the
+[registry](https://github.com/Seeed-Projects/reterminal-sticky-playground-registry)
+and build with an explicit version so the artifact matches `firmware.json`:
+
+```powershell
+idf.py -D PROJECT_VER=0.1.0 build
+```
