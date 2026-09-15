@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Obsidian Sticky setup</title>
+<style>
+  body { font: 16px/1.5 system-ui, sans-serif; margin: 0; padding: 16px; background: #f5f5f2; color: #222; }
+  main { max-width: 560px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 8px 0 16px; }
+  fieldset { border: 1px solid #ccc; border-radius: 8px; margin: 0 0 16px; padding: 12px 16px; background: #fff; }
+  legend { font-weight: 600; padding: 0 6px; }
+  label { display: block; margin: 10px 0 4px; font-size: 14px; color: #444; }
+  input, select, textarea { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #bbb; border-radius: 6px; font: inherit; }
+  textarea { min-height: 90px; }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .row label { margin: 0; }
+  button { padding: 8px 14px; border: 0; border-radius: 6px; background: #444; color: #fff; font: inherit; cursor: pointer; }
+  button.primary { background: #7b3fe4; }
+  .test { margin-top: 10px; display: flex; gap: 8px; align-items: center; }
+  .msg { font-size: 14px; color: #444; }
+  .msg.ok { color: #1a7f37; }
+  .msg.bad { color: #b42318; }
+  .hint { font-size: 13px; color: #666; margin: 4px 0 0; }
+  .actions { display: flex; gap: 8px; margin: 8px 0 24px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Obsidian Sticky setup</h1>
+
+  <fieldset>
+    <legend>Wi-Fi</legend>
+    <label>Network name (SSID)<input id="wifi_ssid"></label>
+    <label>Password<input id="wifi_pass" type="password"></label>
+    <p class="hint">2.4 GHz networks only. Leave the password blank to keep the saved one.</p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Speech to text</legend>
+    <label>Endpoint URL<input id="stt_url"></label>
+    <label>Model<input id="stt_model"></label>
+    <label>API key<input id="stt_key" type="password"></label>
+    <label>Language (optional, e.g. en)<input id="stt_lang"></label>
+    <p class="hint">Any OpenAI-compatible transcription endpoint works: Groq, OpenAI, or a local Whisper server.</p>
+    <div class="test"><button data-test="stt">Test</button><span class="msg" id="msg_stt"></span></div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Cleanup with an LLM</legend>
+    <div class="row"><input id="llm_on" type="checkbox" style="width:auto"><label for="llm_on">Clean up transcripts before saving</label></div>
+    <label>Provider<select id="llm_kind"><option value="anthropic">Anthropic (Claude)</option><option value="openai">OpenAI-compatible chat</option></select></label>
+    <label>Endpoint URL<input id="llm_url"></label>
+    <label>Model<input id="llm_model"></label>
+    <label>API key<input id="llm_key" type="password"></label>
+    <label>Instructions<textarea id="llm_prompt"></textarea></label>
+    <div class="test"><button data-test="llm">Test</button><span class="msg" id="msg_llm"></span></div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Obsidian</legend>
+    <label>Local REST API address<input id="obs_url" placeholder="http://192.168.1.20:27123"></label>
+    <label>API key<input id="obs_key" type="password"></label>
+    <label>Save each note as<select id="obs_mode"><option value="daily">A line appended to today's daily note</option><option value="note">A new note in a folder</option></select></label>
+    <label>Folder for new notes<input id="obs_folder"></label>
+    <label>Daily note line template<input id="obs_line"></label>
+    <p class="hint">Needs the Local REST API plugin with its HTTP server enabled (port 27123). Daily mode also needs the "Local REST API - Periodic Notes" plugin. {time} and {text} are replaced in the template.</p>
+    <div class="test"><button data-test="obsidian">Test</button><span class="msg" id="msg_obsidian"></span></div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Device</legend>
+    <label>Time zone (POSIX TZ)<input id="tz"></label>
+    <label>Sleep after idle minutes (0 = never)<input id="sleep_min" type="number" min="0"></label>
+    <div class="row"><input id="beep" type="checkbox" style="width:auto"><label for="beep">Beep on record, save, and error</label></div>
+  </fieldset>
+
+  <div class="actions">
+    <button class="primary" id="save">Save</button>
+    <button id="restart">Save and restart</button>
+    <span class="msg" id="msg_save"></span>
+  </div>
+</main>
+<script>
+const text = ["wifi_ssid","stt_url","stt_model","stt_lang","llm_kind","llm_url","llm_model","llm_prompt","obs_url","obs_mode","obs_folder","obs_line","tz"];
+const secret = ["wifi_pass","stt_key","llm_key","obs_key"];
+const el = id => document.getElementById(id);
+const say = (id, ok, msg) => { const m = el(id); m.textContent = msg; m.className = "msg " + (ok ? "ok" : "bad"); };
+
+async function load() {
+  const s = await (await fetch("/api/settings")).json();
+  text.forEach(k => el(k).value = s[k] ?? "");
+  secret.forEach(k => el(k).placeholder = s[k + "_set"] ? "(saved, leave blank to keep)" : "");
+  el("llm_on").checked = !!s.llm_on;
+  el("beep").checked = !!s.beep;
+  el("sleep_min").value = s.sleep_min ?? 10;
+}
+
+function collect() {
+  const out = {};
+  text.concat(secret).forEach(k => out[k] = el(k).value);
+  out.llm_on = el("llm_on").checked;
+  out.beep = el("beep").checked;
+  out.sleep_min = parseInt(el("sleep_min").value || "0", 10);
+  return out;
+}
+
+async function save() {
+  say("msg_save", true, "Saving...");
+  const r = await (await fetch("/api/settings", { method: "POST", body: JSON.stringify(collect()) })).json();
+  say("msg_save", r.ok, r.message);
+  if (r.ok) secret.forEach(k => { if (el(k).value) { el(k).value = ""; el(k).placeholder = "(saved, leave blank to keep)"; } });
+  return r.ok;
+}
+
+el("save").onclick = save;
+el("restart").onclick = async () => { if (await save()) { await fetch("/api/reboot", { method: "POST" }); say("msg_save", true, "Restarting. Reconnect to your normal Wi-Fi."); } };
+document.querySelectorAll("[data-test]").forEach(b => b.onclick = async () => {
+  const which = b.dataset.test;
+  say("msg_" + which, true, "Saving and testing...");
+  if (!await save()) { say("msg_" + which, false, "Fix the settings first"); return; }
+  const r = await (await fetch("/api/test/" + which, { method: "POST" })).json();
+  say("msg_" + which, r.ok, r.message);
+});
+load();
+</script>
+</body>
+</html>
