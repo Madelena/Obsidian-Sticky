@@ -20,13 +20,15 @@ device works as a sticky note on your desk until you pick it up again.
 | --- | --- |
 | Hold the side (AI) button | Starts recording. The screen shows a level meter and the elapsed time. |
 | Release the side button | Stops recording and runs transcribe, optional cleanup, and save. |
-| Press Up | Shows the info screen: Wi-Fi network and IP, settings page address, battery, and where notes are being saved. It closes on any button press, or after 12 seconds. |
-| Press Down | Retries the last failed stage. A failed transcribe retries from the audio, which is still in memory. A failed save retries from the text, so nothing has to be spoken again. |
+| Press Up | Pages back through a long note. At the top of the note it shows the info screen instead: Wi-Fi network and IP, settings page address, battery, and where notes are being saved. The info screen closes on any button press, or after 12 seconds. |
+| Press Down | Pages forward through a long note. After a failure it retries the failed stage instead: a failed transcribe retries from the audio, which is still in memory, and a failed save retries from the text, so nothing has to be spoken again. |
 | Hold Down for 3 seconds | Enters setup mode. The device stops its normal work, starts the "Sticky-Setup" Wi-Fi network, and shows the setup instructions. Holding Down again in setup mode restarts the device. |
 | Hold the side button for 5 seconds | Powers off. Press the side button again to turn it back on. |
 
 Recordings shorter than about a third of a second are discarded, and a single
-recording stops at 90 seconds.
+recording stops at 90 seconds. The raw transcript appears on screen as soon
+as it arrives, then the cleaned version replaces it if cleanup is on. Notes
+longer than the screen are paged, with the page count in the footer.
 
 After ten idle minutes the device goes into deep sleep and the screen keeps
 showing the last note. Press the side button to wake it. If you keep the
@@ -81,13 +83,15 @@ timeout is configurable, and setting it to 0 disables sleep entirely.
    - Obsidian's Local REST API address, for example
      `http://192.168.1.20:27123`, and the API key from the plugin settings.
    - Choose daily-note or new-note mode, and set the time zone.
-5. Use the three **Test** buttons. Each one makes a real request: the speech
-   test lists models, the language model test asks for a one-word reply, and
-   the Obsidian test reads the vault root and, in daily mode, checks that the
-   Periodic Notes route answers. Fix anything that comes back red before
-   moving on.
-6. Press **Save and restart**. The device reboots, joins your network, and
+5. Press **Save and restart**. The device reboots, joins your network, and
    shows "Ready".
+6. From a computer or phone on your normal network, open the address shown
+   on the info screen (press Up) and use the three **Test** buttons. Each one
+   makes a real request: the speech test lists models, the language model
+   test asks for a one-word reply, and the Obsidian test reads the vault
+   root and, in daily mode, checks that the Periodic Notes route answers.
+   The buttons are disabled while the page is served from the setup hotspot,
+   because the device has no internet there.
 
 The settings page keeps running after setup. Once the device is on your
 network, open the address shown on the info screen (press Up) in a browser to
@@ -115,6 +119,7 @@ sent back to the browser, and leaving a key field blank keeps the stored one.
 | `obs_mode` | `daily` | `daily` appends a line to today's daily note. `note` creates a new file. |
 | `obs_folder` | `Inbox` | Vault folder for new notes. Used only in `note` mode. Empty puts notes at the vault root. |
 | `obs_line` | `- **{time}** {text}` | Template for the daily-note line. `{time}` becomes `HH:MM` and `{text}` becomes the transcript with newlines flattened to spaces. Used only in `daily` mode. |
+| `note_size` | `large` | Note text size on the screen: `small` (22 px, about 14 lines per page), `medium` (30 px, about 7), or `large` (40 px, about 5). |
 | `tz` | `EST5EDT,M3.2.0,M11.1.0` | POSIX TZ string, used for the clock, the daily-note timestamp, and new-note filenames. |
 | `sleep_min` | `10` | Idle minutes before deep sleep. 0 disables sleep. |
 | `beep` | on | Buzzer cues on record start, record stop, save, and error. |
@@ -171,7 +176,9 @@ the rail alive long enough to read the panic.
 network with band steering usually works, but a 5 GHz-only SSID never will.
 Check the SSID and password by holding Down for 3 seconds to get back into
 setup mode. Note that the device waits up to 20 seconds for a connection
-before it gives up on a recording.
+before it gives up on a recording. On mesh networks a node sometimes accepts
+the association but never hands out an address; the firmware drops such a
+link after 12 seconds and reconnects, which usually lands on another node.
 
 **Save failed, HTTP 401.** The Local REST API key is wrong. Copy it again
 from the plugin's settings tab in Obsidian. Keys are stored but never shown

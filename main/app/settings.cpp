@@ -42,6 +42,7 @@ Values defaults()
     v.obs_mode = "daily";
     v.obs_folder = "Inbox";
     v.obs_line = "- **{time}** {text}";
+    v.note_size = "large";
     v.tz = "EST5EDT,M3.2.0,M11.1.0";
     return v;
 }
@@ -61,7 +62,7 @@ constexpr StringField kStrings[] = {
     {"llm_prompt", &Values::llm_prompt, false}, {"obs_url", &Values::obs_url, false},
     {"obs_key", &Values::obs_key, true},       {"obs_mode", &Values::obs_mode, false},
     {"obs_folder", &Values::obs_folder, false}, {"obs_line", &Values::obs_line, false},
-    {"tz", &Values::tz, false},
+    {"tz", &Values::tz, false},           {"note_size", &Values::note_size, false},
 };
 
 // Reads one NVS string into dest, leaving dest alone when the key is absent.
@@ -216,6 +217,10 @@ bool apply_json(const char *json, std::string &error)
 
     if (v.obs_mode != "daily" && v.obs_mode != "note") {
         error = "obs_mode must be daily or note";
+        return false;
+    }
+    if (v.note_size != "small" && v.note_size != "medium" && v.note_size != "large") {
+        error = "note_size must be small, medium or large";
         return false;
     }
     if (v.llm_kind != "anthropic" && v.llm_kind != "openai") {

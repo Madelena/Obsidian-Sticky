@@ -328,14 +328,21 @@ void run(void *)
             display::sleep();
             board::power_off();
             break;
+        // Up and Down page through a long note; at the top Up opens the info
+        // screen, and after a failure Down retries instead of paging.
         case input::Event::UpClick:
-            if (!s_setup_mode) {
+            if (!s_setup_mode && !screen::scroll(-1)) {
                 show_info();
             }
             break;
         case input::Event::DownClick:
-            if (!s_setup_mode && s_retry_stage != Stage::None) {
+            if (s_setup_mode) {
+                break;
+            }
+            if (s_retry_stage != Stage::None) {
                 process(s_retry_stage);
+            } else {
+                screen::scroll(1);
             }
             break;
         case input::Event::DownHeld:

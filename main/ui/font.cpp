@@ -6,6 +6,7 @@
 #include "ui/font.h"
 
 #include "ui/fonts/font_body.h"
+#include "ui/fonts/font_large.h"
 #include "ui/fonts/font_small.h"
 #include "ui/fonts/font_title.h"
 
@@ -26,6 +27,12 @@ const Font &title()
 const Font &small()
 {
     return font_small;
+}
+
+
+const Font &large()
+{
+    return font_large;
 }
 
 
