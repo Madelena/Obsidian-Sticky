@@ -113,7 +113,7 @@ sent back to the browser, and leaving a key field blank keeps the stored one.
 | `llm_url` | `https://api.anthropic.com/v1/messages` | Chat endpoint. Change this to `.../v1/chat/completions` when using the `openai` kind. |
 | `llm_model` | `claude-haiku-4-5` | Model name. |
 | `llm_key` | empty | API key for the language model. |
-| `llm_prompt` | "You clean up voice transcriptions. Fix punctuation, capitalization, and obvious mis-hearings. Keep the speaker's words, order, and meaning. Do not summarize, add, or remove ideas. Reply with only the cleaned text." | System prompt for the cleanup pass. |
+| `llm_prompt` | A dictation prompt: fix punctuation and mis-hearings, drop fillers and stutters, keep only the corrected half of self-corrections ("I mean", "no wait"), never summarize or add ideas, reply with only the text. | System prompt for the cleanup pass. Edit it on the settings page to make cleanup more or less aggressive. |
 | `obs_url` | `http://192.168.1.2:27123` | Scheme, host, and port of the Local REST API. A trailing slash is trimmed. An `https://` address is accepted with a self-signed certificate. |
 | `obs_key` | empty | Local REST API key, sent as a bearer token. |
 | `obs_mode` | `daily` | `daily` appends a line to today's daily note. `note` creates a new file. |
