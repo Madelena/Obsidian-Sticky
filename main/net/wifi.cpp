@@ -201,6 +201,12 @@ std::string ssid()
 }
 
 
+void set_low_latency(bool on)
+{
+    esp_wifi_set_ps(on ? WIFI_PS_NONE : WIFI_PS_MIN_MODEM);
+}
+
+
 void start_sntp(const std::string &tz)
 {
     setenv("TZ", tz.c_str(), 1);

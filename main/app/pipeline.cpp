@@ -127,11 +127,13 @@ void fail(Stage stage, const char *title, const std::string &reason)
 void process(Stage from)
 {
     const settings::Values s = settings::get();
+    wifi::set_low_latency(true);
 
     if (from == Stage::Transcribe) {
         if (!wifi::connected()) {
             screen::show("Connecting Wi-Fi");
             if (!wifi::wait_connected(kWifiWaitMs)) {
+                wifi::set_low_latency(false);
                 fail(Stage::Transcribe, "No Wi-Fi", "Could not join " + s.wifi_ssid + ".");
                 return;
             }
@@ -139,6 +141,7 @@ void process(Stage from)
         screen::show("Transcribing");
         const stt_client::Result stt = stt_client::transcribe();
         if (!stt.ok) {
+            wifi::set_low_latency(false);
             fail(Stage::Transcribe, "Transcribe failed", stt.error);
             return;
         }
@@ -165,6 +168,7 @@ void process(Stage from)
         screen::show("Saving");
     }
     const obsidian_client::Result saved = obsidian_client::save(s_pending_text);
+    wifi::set_low_latency(false);
     if (!saved.ok) {
         fail(Stage::Save, "Save failed", saved.error);
         return;

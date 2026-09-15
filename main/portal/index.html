@@ -15,6 +15,7 @@
   textarea { min-height: 90px; }
   .row { display: flex; gap: 8px; align-items: center; }
   .row label { margin: 0; }
+  button:disabled { background: #999; cursor: default; }
   button { padding: 8px 14px; border: 0; border-radius: 6px; background: #444; color: #fff; font: inherit; cursor: pointer; }
   button.primary { background: #7b3fe4; }
   .test { margin-top: 10px; display: flex; gap: 8px; align-items: center; }
@@ -88,6 +89,11 @@ const el = id => document.getElementById(id);
 const say = (id, ok, msg) => { const m = el(id); m.textContent = msg; m.className = "msg " + (ok ? "ok" : "bad"); };
 
 async function load() {
+  const mode = await (await fetch("/api/mode")).json();
+  if (mode.captive) document.querySelectorAll("[data-test]").forEach(b => {
+    b.disabled = true;
+    b.nextElementSibling.textContent = "Tests run once the device is on your Wi-Fi: save and restart, then open the address shown on its info screen (press Up).";
+  });
   const s = await (await fetch("/api/settings")).json();
   text.forEach(k => el(k).value = s[k] ?? "");
   secret.forEach(k => el(k).placeholder = s[k + "_set"] ? "(saved, leave blank to keep)" : "");

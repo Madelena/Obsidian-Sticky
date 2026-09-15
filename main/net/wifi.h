@@ -43,6 +43,11 @@ void stop();
 std::string ip();
 std::string ssid();
 
+// LATENCY SWITCH
+// Turns modem power save off while true; uploads run several times faster
+// but idle current rises, so the pipeline only sets it during a note.
+void set_low_latency(bool on);
+
 // CLOCK SYNCER
 // Applies the POSIX TZ string and starts SNTP; safe to call before connect.
 void start_sntp(const std::string &tz);

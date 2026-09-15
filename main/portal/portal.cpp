@@ -75,6 +75,14 @@ esp_err_t handle_index(httpd_req_t *req)
     return httpd_resp_send(req, index_html_start, index_html_end - index_html_start - 1);
 }
 
+// Reports whether the page is being served from the setup hotspot, where
+// the test buttons cannot reach the internet.
+esp_err_t handle_get_mode(httpd_req_t *req)
+{
+    httpd_resp_set_type(req, "application/json");
+    return httpd_resp_sendstr(req, s_captive ? "{\"captive\":true}" : "{\"captive\":false}");
+}
+
 esp_err_t handle_get_settings(httpd_req_t *req)
 {
     httpd_resp_set_type(req, "application/json");
@@ -150,11 +158,16 @@ esp_err_t start(bool captive)
     config.stack_size = 16384;
     config.max_uri_handlers = 8;
     config.lru_purge_enable = true;
+    // Phones on the captive hotspot open many probe connections; drop idle
+    // ones quickly so the page's own requests always find a free socket.
+    config.recv_wait_timeout = 3;
+    config.send_wait_timeout = 3;
     config.uri_match_fn = httpd_uri_match_wildcard;
     ESP_RETURN_ON_ERROR(httpd_start(&s_server, &config), kTag, "httpd");
 
     const httpd_uri_t routes[] = {
         {"/", HTTP_GET, handle_index, nullptr},
+        {"/api/mode", HTTP_GET, handle_get_mode, nullptr},
         {"/api/settings", HTTP_GET, handle_get_settings, nullptr},
         {"/api/settings", HTTP_POST, handle_post_settings, nullptr},
         {"/api/test/*", HTTP_POST, handle_test, nullptr},

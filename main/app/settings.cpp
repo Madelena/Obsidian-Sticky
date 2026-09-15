@@ -17,9 +17,13 @@ constexpr const char *kTag = "settings";
 constexpr const char *kNamespace = "sticky";
 
 constexpr const char *kDefaultPrompt =
-    "You clean up voice transcriptions. Fix punctuation, capitalization, and "
-    "obvious mis-hearings. Keep the speaker's words, order, and meaning. Do not "
-    "summarize, add, or remove ideas. Reply with only the cleaned text.";
+    "You turn a raw voice transcription into a clean written note. Fix "
+    "punctuation, capitalization, and obvious mis-hearings. Remove filler words "
+    "(um, uh, like, you know), stutters, and repeated words. When the speaker "
+    "corrects themselves (\"I mean\", \"no wait\", \"actually\"), keep only the "
+    "corrected version. Keep the speaker's own words, order, and meaning "
+    "otherwise: do not summarize, add ideas, or drop content. Reply with only "
+    "the cleaned text.";
 
 std::mutex s_mutex;
 Values s_values;
