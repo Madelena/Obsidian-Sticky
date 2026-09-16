@@ -33,6 +33,7 @@ std::string s_caption;
 std::string s_status;
 int s_page = 0;
 int s_pages = 1;
+bool s_radio_off = false;
 
 // Picks the note face from the user's size setting.
 const Font &note_face()
@@ -72,11 +73,19 @@ void draw_status(const std::string &status, int level)
         return;
     }
 
+    // "off" reads as chosen and "No" reads as a fault, and the shared prefix
+    // keeps the right edge of the band from jumping between the three.
+    const char *link = "No Wi-Fi";
+    if (s_radio_off) {
+        link = "Wi-Fi off";
+    } else if (wifi::connected()) {
+        link = "Wi-Fi";
+    }
     char right[48];
     const int percent = battery::percent();
-    std::snprintf(right, sizeof(right), "%s   %s%s", wifi::connected() ? "Wi-Fi" : "No Wi-Fi",
+    std::snprintf(right, sizeof(right), "%s   %s%s", link,
                   percent >= 0 ? (std::to_string(percent) + "%").c_str() : "--",
-                  battery::on_usb() ? " USB" : "");
+                  battery::charging() ? " CHG" : (battery::on_usb() ? " USB" : ""));
     std::string line = right;
     if (s_pages > 1) {
         line = std::to_string(s_page + 1) + "/" + std::to_string(s_pages) + "   " + line;
@@ -103,7 +112,13 @@ void draw_note()
     const std::vector<std::string> lines = text::wrap(face, text::prepare(s_note), width);
     const int pitch = face.line_height;
     const int top = body_top();
-    const int per_page = (kBodyBottom - top) / pitch;
+    // Pitch is the distance to the next line, so only the lines before the
+    // last one need it; charging the last its glyph box instead is what fits a
+    // fifth 52 px line into the same band.
+    int per_page = (kBodyBottom - top - face.height) / pitch + 1;
+    if (per_page < 1) {
+        per_page = 1;
+    }
     s_pages = (static_cast<int>(lines.size()) + per_page - 1) / per_page;
     if (s_pages < 1) {
         s_pages = 1;
@@ -146,6 +161,12 @@ void set_caption(const std::string &text)
 }
 
 
+void set_radio_off(bool off)
+{
+    s_radio_off = off;
+}
+
+
 void show(const std::string &status, int level, bool full)
 {
     s_status = status;
@@ -164,6 +185,13 @@ void refresh()
     // count the new face gives before the status band reports it.
     draw_all(-1);
     display::refresh_full();
+}
+
+
+void redraw()
+{
+    draw_all(-1);
+    display::refresh_partial();
 }
 
 

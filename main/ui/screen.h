@@ -20,6 +20,12 @@ void set_note(const std::string &note);
 // empty string hides it and gives the space back to the note.
 void set_caption(const std::string &text);
 
+// RADIO STATE SETTER
+// Stores whether the radio was deliberately stopped, so the status band can
+// say "Wi-Fi off" instead of reporting a fault. pipeline.cpp owns the policy
+// and is the only caller.
+void set_radio_off(bool off);
+
 // SCREEN SHOWER
 // Redraws status, caption, and note. level 0..100 adds a mic meter to the
 // status band; -1 hides it. full forces the slow, clean refresh.
@@ -29,6 +35,11 @@ void show(const std::string &status, int level = -1, bool full = false);
 // Refreshes the panel from the stored status, caption, and note, so a
 // settings change shows without waiting for the next pipeline event.
 void refresh();
+
+// SCREEN REDRAWER
+// Repaints the stored status, caption, and note with a partial refresh, for a
+// status band change such as Wi-Fi or battery that brings no new headline.
+void redraw();
 
 // NOTE SCROLLER
 // Moves delta pages through a note longer than the body and redraws with the

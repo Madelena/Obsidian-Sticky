@@ -43,6 +43,8 @@ constexpr uint32_t kInfoScreenMs = 12000;
 constexpr const char *kSetupSsid = "Sticky-Setup";
 constexpr const char *kNvsNamespace = "sticky";
 constexpr const char *kNvsNoteKey = "last_note";
+constexpr uint32_t kBatteryPollSeconds = 60;
+constexpr int kBatteryStepPercent = 5;
 
 enum class Stage { None, Transcribe, Save };
 
@@ -51,6 +53,17 @@ std::string s_pending_text;
 std::atomic<bool> s_capture_stop{false};
 std::atomic<bool> s_capture_done{true};
 bool s_setup_mode = false;
+
+// Buckets the charge so the panel is repainted on a visible change rather
+// than on every percent, and keeps an unreadable gauge distinct from a flat
+// one. A full refresh costs about a second, so this bucket is what bounds how
+// often an idle device paints at all.
+int battery_step()
+{
+    const int percent = battery::percent();
+    return percent < 0 ? -1 : percent / kBatteryStepPercent;
+}
+
 
 // Formats the wall clock as HH:MM, or a placeholder before SNTP.
 std::string clock_text()
@@ -285,6 +298,9 @@ void run(void *)
     screen::set_note(load_last_note());
     screen::set_caption("");
     power::note_activity();
+    // Seed the cache before anything draws, or the first screen reports a
+    // gauge that has never been read.
+    battery::poll();
 
     const bool wake_recording = board::woke_from_button() && input::ai_pressed();
     if (!settings::wifi_configured()) {
@@ -301,18 +317,36 @@ void run(void *)
         }
     }
 
-    bool wifi_was_up = wifi::connected();
+    // One check owns every idle repaint, so the Wi-Fi indicator and the
+    // battery reading cannot each decide to paint the panel on their own.
+    bool shown_link = wifi::connected();
+    int shown_battery = battery_step();
+    bool shown_charging = battery::charging();
+    bool shown_usb = battery::on_usb();
+    uint32_t seconds_since_poll = 0;
+
     while (true) {
         input::Event event = input::Event::None;
         if (!input::wait(event, pdMS_TO_TICKS(1000))) {
             if (!s_setup_mode && power::idle_expired(settings::get().sleep_min)) {
                 go_to_sleep();
             }
-            // The boot screen is drawn before Wi-Fi is up, so refresh the
-            // indicator and address once the link state changes.
-            if (!s_setup_mode && wifi::connected() != wifi_was_up) {
-                wifi_was_up = wifi::connected();
-                screen::show(s_retry_stage == Stage::None ? "Ready" : "Retry with Down");
+            // Setup mode owns the panel with its instructions, and the gauge
+            // is not worth waking the bus for while nobody can see it.
+            if (s_setup_mode) {
+                continue;
+            }
+            if (++seconds_since_poll >= kBatteryPollSeconds) {
+                seconds_since_poll = 0;
+                battery::poll();
+            }
+            if (wifi::connected() != shown_link || battery_step() != shown_battery ||
+                battery::charging() != shown_charging || battery::on_usb() != shown_usb) {
+                shown_link = wifi::connected();
+                shown_battery = battery_step();
+                shown_charging = battery::charging();
+                shown_usb = battery::on_usb();
+                screen::redraw();
             }
             continue;
         }
