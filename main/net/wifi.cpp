@@ -34,6 +34,7 @@ bool s_started = false;
 bool s_want_sta = false;
 bool s_sntp_started = false;
 std::string s_ssid;
+std::string s_hostname;
 esp_timer_handle_t s_dhcp_watchdog = nullptr;
 // Some mesh nodes accept the association but never answer DHCP; without a
 // disconnect the driver would sit there forever, so this forces a retry.
@@ -141,6 +142,7 @@ esp_err_t set_hostname(const std::string &name)
         // A name written entirely in Chinese leaves nothing a router can show.
         host = filter_hostname(settings::kProductName);
     }
+    s_hostname = host;
     if (s_ap_netif != nullptr) {
         esp_netif_set_hostname(s_ap_netif, host.c_str());
     }
@@ -150,6 +152,12 @@ esp_err_t set_hostname(const std::string &name)
     const esp_err_t err = esp_netif_set_hostname(s_sta_netif, host.c_str());
     ESP_LOGI(kTag, "Hostname %s (%s)", host.c_str(), esp_err_to_name(err));
     return err;
+}
+
+
+const std::string &hostname()
+{
+    return s_hostname;
 }
 
 

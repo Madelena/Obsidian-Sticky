@@ -9,6 +9,7 @@
 #include "ui/fonts/font_body.h"
 #include "ui/fonts/font_large.h"
 #include "ui/fonts/font_small.h"
+#include "ui/fonts/font_heading.h"
 #include "ui/fonts/font_title.h"
 #include "ui/fonts/font_xlarge.h"
 #include "ui/fonts/font_xxlarge.h"
@@ -19,6 +20,12 @@ namespace font {
 const Font &body()
 {
     return font_body;
+}
+
+
+const Font &heading()
+{
+    return font_heading;
 }
 
 

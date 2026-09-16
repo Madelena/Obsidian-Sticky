@@ -63,9 +63,21 @@ bool scrollable();
 // redraws with the last status; returns false when the move is impossible.
 bool scroll(int delta);
 
+// One labelled fact on the info screen, drawn as a row of its table.
+struct InfoRow {
+    std::string label;
+    std::string value;
+};
+
 // MESSAGE SHOWER
-// Replaces everything with a title and lines, full refresh. Used for the
-// info screen, setup mode, and fatal errors.
+// Replaces everything with a heading and wrapped lines, full refresh. Used
+// for setup mode and fatal errors.
 void show_message(const std::string &title, const std::vector<std::string> &lines);
+
+// INFO SHOWER
+// Replaces everything with a heading, a borderless two column table of the
+// rows, and the paragraphs below it after a gap. Full refresh.
+void show_info(const std::string &title, const std::vector<InfoRow> &rows,
+               const std::vector<std::string> &paragraphs);
 
 }  // namespace screen

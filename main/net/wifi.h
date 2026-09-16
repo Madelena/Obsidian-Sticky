@@ -26,6 +26,12 @@ esp_err_t init();
 // the next DHCP lease.
 esp_err_t set_hostname(const std::string &name);
 
+// HOSTNAME READER
+// Returns the hostname set_hostname() last applied, empty before it ran. The
+// info screen prints this rather than deriving it again, so what it offers as
+// a web address is the name the router was actually given.
+const std::string &hostname();
+
 // STATION CONNECTOR
 // Starts connecting to the stored network in the background and keeps
 // retrying on disconnect until stop() is called.

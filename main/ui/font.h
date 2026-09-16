@@ -28,10 +28,11 @@ struct Font {
 namespace font {
 
 // FONT ACCESSORS
-// Return the baked faces: 30 px regular, 30 px bold, 22 px regular, 40 px
-// regular, 52 px regular, 64 px regular.
+// Return the baked faces: 30 px regular, 30 px bold, 40 px bold, 22 px
+// regular, 40 px regular, 52 px regular, 64 px regular.
 const Font &body();
 const Font &title();
+const Font &heading();
 const Font &small();
 const Font &large();
 const Font &xlarge();

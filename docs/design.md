@@ -60,7 +60,7 @@ off, and the note runs clean to the edge of the page.
 A footer band used to sit at the bottom carrying the firmware version and the
 IP address. It was dropped in `aff9c7d`: both already live on the info
 screen, and the space is worth more as note text. The version is now stamped
-at the foot of `screen::show_message()`, so it appears on the info screen and
+at the foot of every titled page, so it appears on the info screen and
 nowhere in normal use. The IP address is left to whichever caller wants it,
 which is why that function does not repeat it.
 
@@ -319,10 +319,23 @@ Two consequences in the event loop in `main/app/pipeline.cpp`:
   keep moving underneath, so dismissing it does not then trigger a repaint of
   its own.
 
-It shows the Wi-Fi network, the IP address once with the hint that it is also
-the settings page, the battery, where notes are being saved, and the firmware
-version. The address used to appear three times on that screen and was cut
-back to one.
+The facts are a borderless two column table: Wi-Fi, IP address, Battery and
+Saving to, with one column set by the widest label so the values line up
+without a rule to carry the eye across. Below it, after a gap, the
+instructions are one short paragraph each rather than a sentence run together,
+because they are three separate things a person might want to do.
+
+The settings address is the last of those paragraphs rather than a
+parenthesis in the IP row. A table cell holding an instruction is what made
+the screen look untidy, and the row it was in now holds nothing but the
+address. It offers the hostname, not the IP, because that is the name worth
+typing; the IP is still in the table right above it for a router that does not
+serve DHCP names in local DNS.
+
+There is no rule under the heading. The heading is 40 px bold against 30 px
+regular below it, and a step that size separates the two without a line. The
+version stamp at the foot takes the same 18 px bottom margin as the status bar
+on the note page, being the same thing: one line of chrome on the floor.
 
 Its heading is the `device_name` setting, which is also the hostname the
 device gives the router, so a household with two of these can tell them apart
@@ -334,7 +347,7 @@ device whose IP is otherwise only visible on its own info screen.
 The footer is deliberately not renamed with it: it reads
 "Obsidian Sticky" and the version, because a screen should always be able to
 say what is running on it, and a device called "Fridge" that cannot name its
-own firmware is no use in a bug report. `show_message()` in
+own firmware is no use in a bug report. `draw_stamp()` in
 `main/ui/screen.cpp` stamps every full-screen page that way, including the
 powered-off one.
 

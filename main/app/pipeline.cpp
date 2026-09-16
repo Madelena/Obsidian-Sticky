@@ -309,18 +309,25 @@ void show_info()
 {
     const settings::Values s = settings::get();
     const int percent = battery::percent();
-    std::vector<std::string> lines = {
-        "Wi-Fi: " + (wifi::connected() ? s.wifi_ssid : std::string("not connected")),
-        "Battery: " + (percent >= 0 ? std::to_string(percent) + "%" : std::string("n/a")) +
-            (battery::charging() ? " charging" : (battery::on_usb() ? " on USB" : "")),
-        "Saving to: " + (s.obs_mode == "daily" ? std::string("daily note") : "new notes in " + s.obs_folder),
-        "Hold Up 3 s to power off. Hold Down 3 s for setup mode.",
+    std::vector<screen::InfoRow> rows = {
+        {"Wi-Fi", wifi::connected() ? s.wifi_ssid : std::string("not connected")},
+        {"Battery", (percent >= 0 ? std::to_string(percent) + "%" : std::string("n/a")) +
+                        (battery::charging() ? " charging" : (battery::on_usb() ? " on USB" : ""))},
+        {"Saving to",
+         s.obs_mode == "daily" ? std::string("daily note") : "new notes in " + s.obs_folder},
+    };
+    std::vector<std::string> paragraphs = {
+        "Hold Up 3 s to power off.",
+        "Hold Down 3 s for setup mode.",
     };
     if (wifi::connected()) {
-        lines.insert(lines.begin() + 1,
-                     "IP address: " + wifi::ip() + " (visit address for settings)");
+        rows.insert(rows.begin() + 1, {"IP address", wifi::ip()});
+        // The hostname the router was actually given, not the device name it
+        // came from: those differ whenever the name is not plain ASCII. The
+        // address above is the fallback for a router that does not serve it.
+        paragraphs.push_back("Visit http://" + wifi::hostname() + " for settings.");
     }
-    screen::show_message(s.device_name, lines);
+    screen::show_info(s.device_name, rows, paragraphs);
     s_info_showing = true;
 }
 

@@ -26,11 +26,10 @@ constexpr int kMargin = 36;      // Every margin of the note, on three sides
 constexpr int kBarMargin = 18;    // Half of it, under the bar, which is chrome
 constexpr int kBlockGap = 6;
 constexpr int kEdgeGap = 12;      // Clearance between the note and the bar
-// The info screen is a titled page rather than a note page, so its heading
-// block is sized for the heading and not by the bar at the foot of the other.
-constexpr int kTitleHeight = 76;
-constexpr int kMessageTop = kTitleHeight + kEdgeGap;
-constexpr int kMessageBottom = canvas::kHeight - kEdgeGap;
+// Titled pages: the info screen, setup mode and the fatal ones. They are not
+// note pages, so they own their own rhythm rather than the bar's.
+constexpr int kParagraphGap = 24;    // Under the heading, and under the table
+constexpr int kLabelGutter = 28;     // Between the two columns of the table
 constexpr int kMeterWidth = 220;
 // Three slots of one pitch, drawn from the right margin inwards. The power
 // slot is reserved whether or not a cable is in, so the aerial and the cell
@@ -266,6 +265,48 @@ void draw_all(int level)
 }
 
 
+// Gives the y below which a titled page must not draw body text, which is
+// where the stamp sits. It takes the same bottom margin as the status bar,
+// being the same thing: one line of chrome on the floor of the page.
+int stamp_top()
+{
+    return canvas::kHeight - kBarMargin - font::small().height;
+}
+
+// Draws the heading of a titled page and returns the y its body starts at.
+// There is no rule under it: the note page dropped its own, and a size step
+// this large separates the two well enough on its own.
+int draw_heading(const std::string &title)
+{
+    const int top = margin_top(font::heading());
+    canvas::draw_text(font::heading(), kMargin, top, text::prepare(title).c_str());
+    return top + font::heading().height + kParagraphGap;
+}
+
+// Draws one wrapped block at x, indenting every line after the first to the
+// same x, and returns the y the next block starts at.
+int draw_paragraph(const std::string &text, int x, int width, int y)
+{
+    for (const std::string &line : text::wrap(font::body(), text::prepare(text), width)) {
+        if (y + font::body().height > stamp_top() - kBlockGap) {
+            break;
+        }
+        canvas::draw_text(font::body(), x, y, line.c_str());
+        y += font::body().line_height;
+    }
+    return y;
+}
+
+// Stamps the product name and firmware version at the foot of a titled page.
+// It names the product rather than the device, so a renamed Sticky still says
+// what it runs.
+void draw_stamp()
+{
+    const std::string stamp =
+        std::string(settings::kProductName) + " v" + esp_app_get_description()->version;
+    canvas::draw_text(font::small(), kMargin, stamp_top(), stamp.c_str());
+}
+
 // Draws every band and pushes it to the panel; the caller holds s_mutex.
 void paint(int level, bool full)
 {
@@ -373,28 +414,43 @@ void show_message(const std::string &title, const std::vector<std::string> &line
 {
     std::lock_guard<std::mutex> lock(s_mutex);
     canvas::clear();
-    canvas::draw_text(font::title(), kMargin, margin_top(font::title()),
-                      text::prepare(title).c_str());
-    canvas::fill_rect(kMargin, kTitleHeight - 2, canvas::kWidth - 2 * kMargin, 2);
-
-    // The only place the firmware version is shown, and it names the product
-    // rather than the device, so a renamed Sticky still says what it runs. The
-    // address belongs to whichever caller wants it, so it is not repeated.
-    const int stamp_top = kMessageBottom - font::small().height;
-    int y = kMessageTop;
-    const int width = canvas::kWidth - 2 * kMargin;
+    int y = draw_heading(title);
     for (const std::string &line : lines) {
-        for (const std::string &wrapped : text::wrap(font::body(), text::prepare(line), width)) {
-            if (y + font::body().height > stamp_top - kBlockGap) {
-                break;
-            }
-            canvas::draw_text(font::body(), kMargin, y, wrapped.c_str());
-            y += font::body().line_height;
-        }
+        y = draw_paragraph(line, kMargin, canvas::kWidth - 2 * kMargin, y);
     }
-    const std::string stamp =
-        std::string(settings::kProductName) + " v" + esp_app_get_description()->version;
-    canvas::draw_text(font::small(), kMargin, stamp_top, stamp.c_str());
+    draw_stamp();
+    display::refresh_full();
+}
+
+
+void show_info(const std::string &title, const std::vector<InfoRow> &rows,
+               const std::vector<std::string> &paragraphs)
+{
+    std::lock_guard<std::mutex> lock(s_mutex);
+    canvas::clear();
+    int y = draw_heading(title);
+
+    // One column for every label, set by the widest of them, so the values
+    // line up without a rule to carry the eye across.
+    int column = 0;
+    for (const InfoRow &row : rows) {
+        const int width = font::text_width(font::body(), text::prepare(row.label).c_str());
+        column = width > column ? width : column;
+    }
+    column += kMargin + kLabelGutter;
+    for (const InfoRow &row : rows) {
+        if (y + font::body().height > stamp_top() - kBlockGap) {
+            break;
+        }
+        canvas::draw_text(font::body(), kMargin, y, text::prepare(row.label).c_str());
+        y = draw_paragraph(row.value, column, canvas::kWidth - kMargin - column, y);
+    }
+
+    y += kParagraphGap;
+    for (const std::string &line : paragraphs) {
+        y = draw_paragraph(line, kMargin, canvas::kWidth - 2 * kMargin, y);
+    }
+    draw_stamp();
     display::refresh_full();
 }
 
