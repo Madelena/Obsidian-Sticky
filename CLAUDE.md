@@ -77,10 +77,13 @@ environments. Do not edit `sdkconfig`; change `sdkconfig.defaults`, delete
   and its struct layout must stay in step with `Icon` in `main/ui/icons.h`.
   The 10 MB Material Symbols font it reads is downloaded to `build/` and is
   never committed, so a rerun needs the network once.
-- Every `/wrapup` bumps the version: `CONFIG_APP_PROJECT_VER` in
-  `sdkconfig.defaults` and the echo in `docs/releasing.md`, patch for fixes,
-  minor for a feature batch. Delete the generated `sdkconfig` afterwards or
-  the old number stays baked in; the device shows it on the info screen.
+- Every `/wrapup` bumps the version and cuts a release. Bump
+  `CONFIG_APP_PROJECT_VER` in `sdkconfig.defaults` and the echo in
+  `docs/releasing.md`, patch for fixes, minor for a feature batch. Delete the
+  generated `sdkconfig` afterwards or the old number stays baked in; the device
+  shows it on the info screen. Then push the commits and an annotated `vX.Y.Z`
+  tag, which is what triggers `.github/workflows/release.yml`. See
+  `docs/releasing.md` for the two CI traps and the `gh workflow run` fallback.
 
 ## Comment style
 
