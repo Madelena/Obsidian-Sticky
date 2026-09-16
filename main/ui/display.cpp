@@ -6,6 +6,8 @@
 // demo; pin numbers come from pin_config.h.
 #include "ui/display.h"
 
+#include <mutex>
+
 #include "driver/gpio.h"
 #include "driver/spi_master.h"
 #include "epaper_panel.h"
@@ -13,6 +15,10 @@
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
+#include "freertos/semphr.h"
+#include "freertos/task.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "pin_config.h"
@@ -28,6 +34,15 @@ seeed_epaper_panel_handle_t s_panel = nullptr;
 spi_device_handle_t s_spi = nullptr;
 uint8_t *s_rotated = nullptr;
 int s_partials_since_full = 0;
+
+// The waveform blocks for about a second on a partial and two on a full, and
+// the panel shares nothing with the radio, so the wait belongs on its own
+// task. Callers rotate the canvas into s_rotated themselves, which is a few
+// milliseconds, then hand the mode over and carry on with the network.
+QueueHandle_t s_render_queue = nullptr;
+SemaphoreHandle_t s_render_done = nullptr;
+std::mutex s_refresh_mutex;
+bool s_render_busy = false;
 
 // Reverses the bit order of one byte, which is half of a 180-degree rotation.
 inline uint8_t reverse_bits(uint8_t value)
@@ -54,7 +69,6 @@ esp_err_t push(seeed_epaper_refresh_mode_t mode)
         return ESP_ERR_INVALID_STATE;
     }
     const int64_t started = esp_timer_get_time();
-    rotate_canvas();
     const seeed_epaper_area_t full = {0, 0, canvas::kWidth, canvas::kHeight};
     const esp_err_t err = seeed_epaper_panel_refresh_area(
         s_panel, &full, s_rotated, canvas::kStride, SEEED_EPAPER_PIXEL_FORMAT_MONO1_MSB, mode);
@@ -64,6 +78,44 @@ esp_err_t push(seeed_epaper_refresh_mode_t mode)
              mode == SEEED_EPAPER_REFRESH_FULL ? "full" : "partial",
              static_cast<unsigned>((esp_timer_get_time() - started) / 1000));
     return err;
+}
+
+
+// Waits out one panel waveform, so the task that asked for it does not.
+void render_task(void *)
+{
+    while (true) {
+        seeed_epaper_refresh_mode_t mode = SEEED_EPAPER_REFRESH_FULL;
+        if (xQueueReceive(s_render_queue, &mode, portMAX_DELAY) == pdTRUE) {
+            push(mode);
+            xSemaphoreGive(s_render_done);
+        }
+    }
+}
+
+// Blocks until an earlier refresh has finished with s_rotated. The caller
+// must hold s_refresh_mutex.
+void wait_idle_locked()
+{
+    if (!s_render_busy) {
+        return;
+    }
+    xSemaphoreTake(s_render_done, portMAX_DELAY);
+    s_render_busy = false;
+}
+
+// Rotates the canvas and hands the waveform to the render task.
+esp_err_t start_refresh(seeed_epaper_refresh_mode_t mode)
+{
+    if (s_panel == nullptr || s_rotated == nullptr || canvas::data() == nullptr) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    std::lock_guard<std::mutex> lock(s_refresh_mutex);
+    wait_idle_locked();
+    rotate_canvas();
+    s_render_busy = true;
+    xQueueSend(s_render_queue, &mode, portMAX_DELAY);
+    return ESP_OK;
 }
 
 }  // namespace
@@ -124,6 +176,14 @@ esp_err_t init()
     if (s_rotated == nullptr) {
         return ESP_ERR_NO_MEM;
     }
+    s_render_queue = xQueueCreate(1, sizeof(seeed_epaper_refresh_mode_t));
+    s_render_done = xSemaphoreCreateBinary();
+    if (s_render_queue == nullptr || s_render_done == nullptr) {
+        return ESP_ERR_NO_MEM;
+    }
+    if (xTaskCreate(render_task, "render", 4096, nullptr, 4, nullptr) != pdPASS) {
+        return ESP_ERR_NO_MEM;
+    }
     ESP_LOGI(kTag, "Panel ready, 800x480 mono, rotated 180");
     return ESP_OK;
 }
@@ -132,7 +192,7 @@ esp_err_t init()
 esp_err_t refresh_full()
 {
     s_partials_since_full = 0;
-    return push(SEEED_EPAPER_REFRESH_FULL);
+    return start_refresh(SEEED_EPAPER_REFRESH_FULL);
 }
 
 
@@ -141,7 +201,14 @@ esp_err_t refresh_partial()
     if (++s_partials_since_full >= kPartialsBeforeFull) {
         return refresh_full();
     }
-    return push(SEEED_EPAPER_REFRESH_PARTIAL);
+    return start_refresh(SEEED_EPAPER_REFRESH_PARTIAL);
+}
+
+
+void wait_idle()
+{
+    std::lock_guard<std::mutex> lock(s_refresh_mutex);
+    wait_idle_locked();
 }
 
 
@@ -150,6 +217,10 @@ esp_err_t sleep()
     if (s_panel == nullptr) {
         return ESP_ERR_INVALID_STATE;
     }
+    // The image left on the panel is the one the user keeps looking at, so the
+    // controller must not be put to sleep with a waveform still running.
+    std::lock_guard<std::mutex> lock(s_refresh_mutex);
+    wait_idle_locked();
     ESP_RETURN_ON_ERROR(seeed_epaper_panel_sleep(s_panel), kTag, "panel sleep");
     return gpio_set_level(static_cast<gpio_num_t>(PIN_EPD_EN), 0);
 }
