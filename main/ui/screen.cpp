@@ -7,6 +7,7 @@
 #include "ui/screen.h"
 
 #include <cstdio>
+#include <mutex>
 
 #include "app/settings.h"
 #include "board/battery.h"
@@ -29,6 +30,12 @@ constexpr int kBlockGap = 6;
 constexpr int kBodyTop = kStatusHeight + 12;
 constexpr int kBodyBottom = canvas::kHeight - 12;
 constexpr int kMeterWidth = 220;
+
+// The pipeline task and the portal's HTTP task both draw here: the portal
+// redraws on a settings save and on POST /api/show. The canvas is one shared
+// buffer, so without this the two could interleave into a torn frame.
+// display.cpp takes its own lock underneath, always in this order.
+std::mutex s_mutex;
 
 std::string s_note;
 std::string s_caption;
@@ -152,6 +159,7 @@ void draw_all(int level)
 
 void set_note(const std::string &note)
 {
+    std::lock_guard<std::mutex> lock(s_mutex);
     s_note = note;
     s_page = 0;
 }
@@ -159,18 +167,21 @@ void set_note(const std::string &note)
 
 void set_caption(const std::string &text)
 {
+    std::lock_guard<std::mutex> lock(s_mutex);
     s_caption = text;
 }
 
 
 void set_radio_off(bool off)
 {
+    std::lock_guard<std::mutex> lock(s_mutex);
     s_radio_off = off;
 }
 
 
 void show(const std::string &status, int level, bool full)
 {
+    std::lock_guard<std::mutex> lock(s_mutex);
     s_status = status;
     draw_all(level);
     if (full) {
@@ -183,6 +194,7 @@ void show(const std::string &status, int level, bool full)
 
 void refresh()
 {
+    std::lock_guard<std::mutex> lock(s_mutex);
     // draw_all reflows the note first, so draw_note clamps s_page to the page
     // count the new face gives before the status band reports it.
     draw_all(-1);
@@ -192,6 +204,7 @@ void refresh()
 
 void redraw()
 {
+    std::lock_guard<std::mutex> lock(s_mutex);
     draw_all(-1);
     display::refresh_partial();
 }
@@ -199,6 +212,7 @@ void redraw()
 
 bool scroll(int delta)
 {
+    std::lock_guard<std::mutex> lock(s_mutex);
     const int target = s_page + delta;
     if (target < 0 || target >= s_pages) {
         return false;
@@ -212,6 +226,7 @@ bool scroll(int delta)
 
 void show_message(const std::string &title, const std::vector<std::string> &lines)
 {
+    std::lock_guard<std::mutex> lock(s_mutex);
     canvas::clear();
     canvas::draw_text(font::title(), kMargin, 18, text::prepare(title).c_str());
     canvas::fill_rect(kMargin, kStatusHeight - 2, canvas::kWidth - 2 * kMargin, 2);

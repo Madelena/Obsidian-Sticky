@@ -279,7 +279,7 @@ void record_and_process()
     process(Stage::Transcribe);
 }
 
-// Shows network and target details until a button is pressed or time is up.
+// Shows network and target details, and stays until a button dismisses it.
 void show_info()
 {
     const settings::Values s = settings::get();

@@ -37,9 +37,10 @@ device works as a sticky note on your desk until you pick it up again.
 | Hold Up for 3 seconds | Powers off. Press the side button to turn it back on. The side button cannot do this, because holding it is how you record. |
 
 Recordings shorter than about a third of a second are discarded, and a single
-recording stops at 90 seconds. The raw transcript appears on screen as soon
-as it arrives, then the cleaned version replaces it if cleanup is on. Notes
-longer than the screen are paged, with the page count in the status band.
+recording stops at 90 seconds. The status band tracks the work, and the note
+itself is drawn once, when it is safely in your vault, because every redraw
+of this screen costs a second or two. Notes longer than the screen are
+paged, with the page count in the status band.
 
 After ten idle minutes the device goes into deep sleep and the screen keeps
 showing the last note. Press the side button to wake it. If you keep the

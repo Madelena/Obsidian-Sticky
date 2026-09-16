@@ -68,7 +68,7 @@ environments. Do not edit `sdkconfig`; change `sdkconfig.defaults`, delete
   hand-edit them. Rerun the generator and keep its struct layout in step with
   `main/ui/font.h`.
 - Every `/wrapup` bumps the version: `CONFIG_APP_PROJECT_VER` in
-  `sdkconfig.defaults` and the echo in `tools/merge_bin.md`, patch for fixes,
+  `sdkconfig.defaults` and the echo in `docs/releasing.md`, patch for fixes,
   minor for a feature batch. Delete the generated `sdkconfig` afterwards or
   the old number stays baked in; the device shows it on the info screen.
 
@@ -82,6 +82,13 @@ em-dashes anywhere.
 
 ## Reference
 
-Verified pin table, power latch sequence, bus rules, display and mic facts,
-and the upstream sources behind them are in `docs/hardware.md`. Third-party
-origins and licenses are in `THIRD_PARTY.md`.
+| Document | Read it when |
+| --- | --- |
+| `docs/hardware.md` | You need a pin, the power latch or deep-sleep hold sequence, a bus rule, or a panel, mic, font or button fact that was found by experiment. |
+| `docs/architecture.md` | You are changing which task does what, the pipeline stages, the warm TLS connections, the render handoff, the idle repaint check, settings, or you are about to propose an audio codec. |
+| `docs/design.md` | You are about to change anything the user sees or hears: the screen layout, the text sizes, the status wording, the buttons, the buzzer cues, the info screen, or the settings page. |
+| `docs/latency.md` | You are making anything faster, or you want the measured cost of a refresh, a handshake, an upload or a provider reply before guessing at one. |
+| `docs/developing.md` | You are building, flashing, capturing serial, or reaching for a script in `tools/`. |
+| `docs/releasing.md` | You are cutting a tag, producing a merged image, or submitting to the Seeed Playground. |
+
+Third-party origins and licenses are in `THIRD_PARTY.md`.

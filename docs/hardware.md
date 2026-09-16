@@ -185,6 +185,66 @@ handle from it.
   is what lets `pipeline` start recording immediately when the user wakes the
   device by holding the side button down.
 
+## Learned by experiment
+
+Facts that are not in anyone's documentation and were found by building
+against the board.
+
+### The side button cannot carry a long press
+
+Holding the AI button is how recording works, so the button is never up long
+enough for a long press to mean anything else. Worse, the drain loop at the
+end of `record_and_process()` in `main/app/pipeline.cpp` discards the button
+release, and it swallows any long press queued behind it. A power-off bound to
+the side button was therefore dead code, present and unreachable, until this
+was found. Power off lives on a long press of Up instead, matching setup mode
+on a long press of Down.
+
+### The BQ27220 discharge bit is the wrong way to detect charging
+
+A full pack sitting on a cable is not discharging either, so the discharge bit
+reads as charging forever once the battery tops up. Use the gauge's signed
+current instead, positive into the pack, with a threshold of about 10 mA to
+ignore the noise around zero. `main/board/battery.cpp` also requires the
+external-power pin to be high, and reports "not charging" on a failed read
+rather than guessing.
+
+### Only the font file can be memory mapped, not the partition
+
+Mapping the whole 8 MB `font` partition fails with
+`Address 0x00810000 is out of range for 24bit flash mapping`: the flash cache
+addresses 16 MB and the partition's tail lies beyond it. `cjk_font::init()`
+therefore reads the TrueType table directory at the start of the partition,
+computes the real file length from it, and maps only that.
+
+### Lines per page charges the last line only its glyph box
+
+```
+per_page = (bottom - top - face.height) / pitch + 1
+```
+
+Pitch is the distance to the *next* line, so only the lines before the last
+one need it. With 12 px margins above and below the body, this is what fits a
+fifth 52 px line into the same band.
+
+| Face | Nominal | Glyph box | Pitch | Lines per page |
+| --- | --- | --- | --- | --- |
+| `body` (small) | 30 px | 38 px | 42 px | 9 |
+| `large` (medium) | 40 px | 50 px | 55 px | 7 |
+| `xlarge` (large) | 52 px | 66 px | 73 px | 5 |
+| `xxlarge` (xlarge) | 64 px | 80 px | 88 px | 4 |
+
+The pitch is `round(1.10 * glyph box height)`, set in `tools/gen_font.py`. The
+glyph box is ascent plus descent at the nominal size, which is why it is
+larger than the nominal number.
+
+### The panel blocks the calling task for the whole waveform
+
+About 1.9 s for a full refresh and 0.9 s for a partial, both measured. That
+put the panel at 46 percent of the original end to end budget for a note, and
+is why drawing moved onto its own task. Numbers and method in
+`docs/latency.md`.
+
 ## Known ambiguity
 
 Seeed's documentation lists **GPIO7 as both the IMU interrupt and the fuel
