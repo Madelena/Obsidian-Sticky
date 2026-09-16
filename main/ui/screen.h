@@ -1,13 +1,15 @@
 // =============================================================================
 // SCREEN
 // =============================================================================
-// The one screen this device has: a status band, an optional caption, and the
-// last note. pipeline.cpp drives it; it owns the layout, the note scrolling,
-// and decides partial versus full refresh via display.cpp.
+// The one screen this device has: the last note, an optional caption, and a
+// status band along the foot. pipeline.cpp drives it; it owns the layout, the
+// note scrolling, and decides partial versus full refresh via display.cpp.
 #pragma once
 
 #include <string>
 #include <vector>
+
+#include "ui/icons.h"
 
 namespace screen {
 
@@ -16,7 +18,7 @@ namespace screen {
 void set_note(const std::string &note);
 
 // CAPTION SETTER
-// Stores the line shown under the status band, such as an error reason; an
+// Stores the line shown above the status band, such as an error reason; an
 // empty string hides it and gives the space back to the note.
 void set_caption(const std::string &text);
 
@@ -30,6 +32,16 @@ void set_radio_off(bool off);
 // Redraws status, caption, and note. level 0..100 adds a mic meter to the
 // status band; -1 hides it. full forces the slow, clean refresh.
 void show(const std::string &status, int level = -1, bool full = false);
+
+// READY SHOWER
+// Redraws with nothing where the status word goes, which is what the device
+// shows while it is simply waiting. full forces the slow, clean refresh.
+void show_ready(bool full = false);
+
+// SLEEP SHOWER
+// Redraws with the crescent moon in place of the status word. full forces the
+// slow, clean refresh.
+void show_asleep(bool full = false);
 
 // SCREEN REFRESHER
 // Refreshes the panel from the stored status, caption, and note, so a

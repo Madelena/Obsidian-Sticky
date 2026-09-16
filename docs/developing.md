@@ -63,6 +63,7 @@ idf.py -p COM3 flash monitor
 | Script | Does |
 | --- | --- |
 | `tools/gen_font.py` | Bakes a TrueType face at one pixel size into a 1-bit C header in `main/ui/fonts/`. Never hand-edit the output. |
+| `tools/gen_icons.py` | Downloads the Material Symbols variable font to `build/`, bakes the status band glyphs into `main/ui/icons_data.h`. Never hand-edit the output. Needs `fonttools`. |
 | `tools/fetch_cjk_font.py` | Downloads Noto Sans TC, pins it at regular weight, subsets it to the ranges the screen needs, and writes `build/font_cjk.ttf`. Needs `fonttools`. |
 | `tools/stt_test.py` | Sends a WAV to the transcription endpoint with byte-for-byte the multipart body `post_wav()` builds. |
 | `tools/llm_test.py` | Sends a transcript through the cleanup model with the request bodies `llm_client.cpp` builds, for both the anthropic and openai kinds. |

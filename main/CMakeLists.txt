@@ -17,6 +17,7 @@ idf_component_register(
         "ui/canvas.cpp"
         "ui/cjk_font.cpp"
         "ui/display.cpp"
+        "ui/icons.cpp"
         "ui/screen.cpp"
         "net/wifi.cpp"
         "net/http.cpp"

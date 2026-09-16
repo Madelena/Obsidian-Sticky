@@ -129,15 +129,18 @@ five things at once:
 
 - Wi-Fi link state
 - radio-off state, after the Wi-Fi idle timeout stopped the station
-- the battery percentage bucketed to 5 percent steps
+- the battery percentage bucketed by `icons::battery_step()`
 - charge direction
 - USB presence
 
 If any differs from what is on screen, one `screen::redraw()` runs. The point
 is that the battery reading and the Wi-Fi indicator cannot each decide to
 paint the panel on their own: a full refresh costs about a second, and two
-owners means two of them. The 5 percent bucket is what bounds how often an
-idle device paints at all. The trackers keep moving while the info screen is
+owners means two of them. That bucket is the same one the gauge icon draws
+from, so the panel never paints for a change too small to see, and it is what
+bounds how often an idle device paints at all. It went from twenty 5 percent
+buckets to the icon's five steps when the band stopped showing a number, which
+is a fifth of the idle repaints for the same discharge. The trackers keep moving while the info screen is
 up, so dismissing it does not trigger a second repaint.
 
 ## Settings

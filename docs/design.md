@@ -24,20 +24,38 @@ them tempting than before.
 
 ## The screen
 
-One screen, 800x480, one bit per pixel. Top to bottom: a status band, an
-optional single caption line, then the note body. The constants are at the
-top of `main/ui/screen.cpp`.
+One screen, 800x480, one bit per pixel. Top to bottom: the note body, an
+optional single caption line, then the status band along the foot. The
+constants are at the top of `main/ui/screen.cpp`.
 
 | Band | Geometry | Carries |
 | --- | --- | --- |
-| Status | 76 px tall, closed by a 2 px rule inset to the margins | The state, left, in bold 30 px. Wi-Fi and battery, right, in 22 px |
-| Caption | One 22 px line at y 88, hidden when empty | A failure reason, or a note that the raw text was saved |
-| Body | y 88 to y 468, or below the caption when one is showing | The note, wrapped, and a position bar in the right margin when it overflows |
+| Body | y 27 to 17 down to y 412, the top depending on the face, the bottom on the caption | The note, wrapped, and a position bar in the right margin when it overflows |
+| Caption | One 22 px line at y 381, hidden when empty | A failure reason, or a note that the raw text was saved |
+| Status | One 30 px line at y 424, clearing the bottom edge by 18 px, no rule over it | The state, left, as a word in bold 30 px or nothing at all. Three 34 px icon slots, right |
 
-Side margins are 36 px throughout, and the body keeps 12 px clear above and
-below. While recording, the right side of the status band is replaced by a
-220 px level meter. A caption costs the body one line by pushing `body_top()`
-down; an empty caption gives the space straight back.
+Margins are 36 px on the top, left and right alike, and the note keeps 12 px
+clear of the bar below it. The head margin is measured to the ink and not to
+the glyph box, so the y the note is drawn at moves with the face, from 27 for
+the smallest to 17 for the largest; `docs/hardware.md` has the arithmetic.
+
+The bar clears the bottom edge by 18 px, half the note's margin, because it is
+chrome and should sit tighter than the thing it describes. It has no height of
+its own: `bar_top()` places the one line of 30 px bold by that bottom margin
+and everything else in the bar centers on it. The band it used to be was a
+leftover from the rule that closed it, and sizing one cost the note 7 px for
+nothing. While recording, the right side of the status band is replaced by a
+220 px level meter. A caption costs the body one line by pulling
+`body_bottom()` up; an empty caption gives the space straight back.
+
+The band sits on the bottom edge so the note starts at the top of the page,
+where the eye already is. The caption stays beside the band rather than beside
+the note, because a failure reason belongs with the failure title that names
+it.
+
+The rule that used to close the status band was dropped along with the words
+in it. With the band down to three small marks there is nothing left to fence
+off, and the note runs clean to the edge of the page.
 
 A footer band used to sit at the bottom carrying the firmware version and the
 IP address. It was dropped in `aff9c7d`: both already live on the info
@@ -52,6 +70,74 @@ repaints at about a second each. A swipe therefore commits to a whole screen
 of travel and costs one partial refresh, and it keeps a line of overlap so
 the reader does not lose their place. The 8 px bar in the right margin is the
 only cue that there is more note below, so it is drawn whenever there is.
+
+## The status band is pictures, not words
+
+The note is the point of the screen, so everything above it that is not the
+note competes with it. The band is therefore drawn rather than written, and
+only the states that need naming keep a word.
+
+| Shows | Material Symbols glyph |
+| --- | --- |
+| Sleeping | `bedtime` |
+| Wi-Fi connected | `wifi` |
+| Wi-Fi stopped | `wifi_off` |
+| Wi-Fi lost | `signal_wifi_bad` |
+| Charging | `bolt` |
+| On USB, not charging | `power` |
+| Battery, four quarters | `battery_android_full`, `_5`, `_3`, `_1` |
+| Battery under 10 percent | `battery_android_alert` |
+| Gauge did not answer | `battery_android_question` |
+
+Ready has no mark at all. It is the state the device is in almost all the
+time, and the cleanest thing a status band can say about a device that is
+simply waiting is nothing. Every other state is worth reading and stays as
+text in the same 30 px bold, so the band is empty exactly when there is
+nothing to report:
+
+- Working: Connecting Wi-Fi, Listening M:SS, Transcribing, Cleaning up,
+  Saving.
+- Done: Saved HH:MM, which is a receipt and stays until the next thing
+  happens, so the band is rarely blank in normal use.
+- Nothing to save: No speech detected.
+- Failed, each with a reason in the caption and "Press Down to retry.":
+  No Wi-Fi, Transcribe failed, Save failed, Microphone error.
+- Waiting on the user: Retry with Down.
+
+Sleeping keeps its moon rather than a word, because that screen outlives the
+power being cut and has to say by itself that the device is off rather than
+frozen.
+
+The marks are Material Symbols rather than shapes drawn by hand, because
+Google already solved legibility at this size and a set that was designed
+together reads as a set. `tools/gen_icons.py` bakes them to 1-bit at 40 px for
+the face and 34 px for the right-hand cluster, outlined rather than filled and
+at weight 500: a panel with no anti-aliasing has nothing to soften a hairline
+with, and 400 breaks up under the threshold.
+
+Sleeping is a crescent moon and not a sleeping face, which is what the design
+started from. Material has no sleeping face, `sentiment_calm` reads as calm
+rather than asleep, and the moon is the one mark here that is unmistakable
+from across a room. That last point is the argument: this is a device on a
+fridge. `mood` was baked for Ready before Ready lost its mark, and was dropped
+from `tools/gen_icons.py` with it rather than left in the binary.
+
+The cell is quantized to five drawings and shows no number. It lands on the
+nearest quarter, so the thresholds are 87.5, 62.5 and 37.5 percent, and
+anything under 10 percent is the warning mark instead. A precise reading is a
+thing you go and look up, not a thing you glance at, so the percentage lives
+on the info screen. `icons::battery_step()` is both the drawing and the
+repaint trigger, so the panel cannot paint for a change too small to see.
+
+The four quarters are not the four adjacent members of the `battery_android`
+family. That family is a seven step fill, so taking every other step keeps the
+four drawings visibly apart; adjacent ones differ by too little to count at a
+glance.
+
+Every icon is centered in its em square rather than on its own ink, and
+`tools/gen_icons.py` stores the offsets that make that work. Otherwise the
+three Wi-Fi states, whose ink differs by the 2 px of a slash, would each sit
+on a slightly different line.
 
 ## Text sizes
 
@@ -207,8 +293,8 @@ the glass. Which way it belongs is a guess until a coordinate arrives.
 
 Holding the side button is how the device is switched on, which means the
 button is still down when the firmware starts. That press is deliberately
-thrown away: the device comes up at "Ready" and records only when the button
-is pressed again. Recording something nobody meant to say, on the way to a
+thrown away: the device comes up ready and records only when the button is
+pressed again. Recording something nobody meant to say, on the way to a
 vault, is the worse failure.
 
 Waking from deep sleep is the exception, and the reason the distinction
@@ -256,13 +342,13 @@ powered-off one.
 
 Small choices that were made deliberately.
 
-- The Wi-Fi indicator reads "Wi-Fi", "Wi-Fi off" or "No Wi-Fi". "off" reads
-  as chosen and "No" reads as a fault, and the shared prefix keeps the right
-  edge of the band from jumping between the three.
-- The battery shows "CHG" only when charge is actually flowing into the pack
-  and "USB" when a cable is attached but the pack is full. Conflating those
-  was a bug; `docs/hardware.md` explains why the gauge's discharge bit cannot
-  tell them apart.
+- The icon slots are fixed, including the power slot that is empty on
+  battery, so the aerial and the cell never shift under a change that is not
+  about them.
+- The bolt means charge is actually flowing into the pack and the plug means
+  a cable is attached but the pack is full. Conflating those was a bug;
+  `docs/hardware.md` explains why the gauge's discharge bit cannot tell them
+  apart.
 - A failure puts the stage in the title and the reason plus "Press Down to
   retry." in the caption, so the screen says both what broke and what to do.
 
@@ -285,9 +371,13 @@ Nothing a person said out loud should ever be lost to a transient error.
   works as a sticky note. Render what the user should see, then sleep.
 - Every repaint costs about a second and some power, so the idle loop
   repaints only when something visible actually changed: the Wi-Fi state, the
-  radio-off state, a five percent step of battery, the charge direction, or
-  USB presence. One consolidated check owns that decision, so two subsystems
+  radio-off state, a step of the battery icon, the charge direction, or USB
+  presence. One consolidated check owns that decision, so two subsystems
   cannot each decide to paint.
+- Dropping the battery percentage bought most of an idle device's refreshes
+  back. A full discharge used to cross twenty 5 percent buckets and now
+  crosses the gauge icon's four thresholds, so the battery asks for a fifth of
+  the repaints it did when the band carried a number.
 - Partial refreshes accumulate ghosting, so `refresh_partial()` promotes every
   twentieth to a full one, and the screens the user sits and reads ask for a
   full refresh outright.

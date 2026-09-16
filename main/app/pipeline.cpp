@@ -34,6 +34,7 @@
 #include "nvs.h"
 #include "portal/portal.h"
 #include "ui/display.h"
+#include "ui/icons.h"
 #include "ui/screen.h"
 
 namespace pipeline {
@@ -46,7 +47,6 @@ constexpr const char *kSetupSsid = "Sticky-Setup";
 constexpr const char *kNvsNamespace = "sticky";
 constexpr const char *kNvsNoteKey = "last_note";
 constexpr uint32_t kBatteryPollSeconds = 60;
-constexpr int kBatteryStepPercent = 5;
 
 enum class Stage { None, Transcribe, Save };
 
@@ -58,14 +58,13 @@ bool s_setup_mode = false;
 bool s_radio_off = false;
 bool s_info_showing = false;
 
-// Buckets the charge so the panel is repainted on a visible change rather
-// than on every percent, and keeps an unreadable gauge distinct from a flat
-// one. A full refresh costs about a second, so this bucket is what bounds how
-// often an idle device paints at all.
+// Buckets the charge the way the gauge icon does, so the panel repaints on a
+// change the user can see rather than on every percent. A full refresh costs
+// about a second, so this bucket is what bounds how often an idle device
+// paints at all.
 int battery_step()
 {
-    const int percent = battery::percent();
-    return percent < 0 ? -1 : percent / kBatteryStepPercent;
+    return icons::battery_step(battery::percent());
 }
 
 
@@ -298,7 +297,7 @@ void record_and_process()
 
     if (clip::duration_ms() < kMinRecordingMs) {
         http::drop_warm();
-        screen::show("Ready");
+        screen::show_ready();
         return;
     }
     ESP_LOGI(kTag, "Recorded %lu ms", static_cast<unsigned long>(clip::duration_ms()));
@@ -351,7 +350,7 @@ void sync_touch()
 // Renders the sleep screen and enters deep sleep.
 void go_to_sleep()
 {
-    screen::show("Sleeping", -1, true);
+    screen::show_asleep(true);
     display::sleep();
     power::deep_sleep();
 }
@@ -380,7 +379,7 @@ void run(void *)
         if (wake_recording) {
             record_and_process();
         } else {
-            screen::show("Ready", -1, true);
+            screen::show_ready(true);
         }
     }
 
@@ -455,7 +454,11 @@ void run(void *)
         if (s_info_showing) {
             s_info_showing = false;
             if (event != input::Event::AiDown) {
-                screen::show(s_retry_stage == Stage::None ? "Ready" : "Retry with Down", -1, true);
+                if (s_retry_stage == Stage::None) {
+                    screen::show_ready(true);
+                } else {
+                    screen::show("Retry with Down", -1, true);
+                }
                 continue;
             }
         }

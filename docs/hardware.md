@@ -226,19 +226,44 @@ fits = (bottom - top - face.height) / pitch + 1
 ```
 
 Pitch is the distance to the *next* line, so only the lines before the last
-one need it. With 12 px margins above and below the body, this is what fits a
-fifth 52 px line into the same band.
+one need it. That is what fits a fifth 52 px line into the same space. `top`
+is per face rather than fixed, for the reason in the next section, and
+`bottom` is y 412, which is 12 px above the status bar.
 
-| Face | Nominal | Glyph box | Pitch | Lines per screen |
-| --- | --- | --- | --- | --- |
-| `body` (small) | 30 px | 38 px | 42 px | 9 |
-| `large` (medium) | 40 px | 50 px | 55 px | 7 |
-| `xlarge` (large) | 52 px | 66 px | 73 px | 5 |
-| `xxlarge` (xlarge) | 64 px | 80 px | 88 px | 4 |
+| Face | Nominal | Glyph box | Cap gap | Draw top | Pitch | Lines |
+| --- | --- | --- | --- | --- | --- | --- |
+| `body` (small) | 30 px | 38 px | 9 px | y 27 | 42 px | 9 |
+| `large` (medium) | 40 px | 50 px | 11 px | y 25 | 55 px | 7 |
+| `xlarge` (large) | 52 px | 66 px | 16 px | y 20 | 73 px | 5 |
+| `xxlarge` (xlarge) | 64 px | 80 px | 19 px | y 17 | 88 px | 4 |
 
 The pitch is `round(1.10 * glyph box height)`, set in `tools/gen_font.py`. The
 glyph box is ascent plus descent at the nominal size, which is why it is
 larger than the nominal number.
+
+The medium face is the tight one. Seven of its lines need `6 * 55 + 50`, so
+380 px, and it is drawn from y 25, leaving 7 px spare. The other three have 11,
+34 and 51 px. Anything that lowers `bottom` by more than 7 px costs the medium
+face a line, and `auto` then falls through to the 30 px face a note sooner.
+
+### The head margin is set per face, because a glyph box is not its ink
+
+`canvas::draw_text()` places a line by the top of its glyph box, but the eye
+measures the margin to the ink. Every capital and ascender in Atkinson shares
+one top, and it sits 9, 11, 16 or 19 px below the box depending on the face,
+so a fixed head margin makes a short note in the 64 px face look tighter at
+the top than a long one in the 30 px face. Under `auto` the face moves with
+the note, so the top margin would visibly breathe as notes come and go.
+
+`margin_top()` in `main/ui/screen.cpp` therefore draws at `36 - cap_gap(face)`,
+which puts the ink of the first line 36 px down, the same as the 36 px it
+clears at the sides. The side figure needs no such correction: the left side
+bearing of every capital and digit in these faces is 0.
+
+`cap_gap()` scans the baked `H` for its first inked row rather than carrying a
+table, so regenerating a face at a different size cannot leave the layout
+quietly wrong. It costs one pass over about 40 bytes, up to four times per
+layout under `auto`.
 
 ### The GT911 reports no configuration, so it never reports a touch
 

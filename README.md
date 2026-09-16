@@ -134,7 +134,7 @@ with `esptool` yourself.
      `http://192.168.1.20:27123`, and the API key from the plugin settings.
    - Choose daily-note or new-note mode, and set the time zone.
 5. Press **Save and restart**. The device reboots, joins your network, and
-   shows "Ready".
+   shows the ready face.
 6. From a computer or phone on your normal network, open the address shown
    on the info screen (press Up) and use the three **Test** buttons. Each one
    makes a real request: the speech test lists models, the language model
@@ -179,7 +179,7 @@ curl -X POST http://<device-ip>/api/show --data-binary "Hello 你好"
 | `text_size` | `auto` | Note text size on the screen. `auto` picks the largest size that shows the whole note at once. The fixed sizes are `small` (30 px, about 9 lines), `medium` (40 px, about 7), `large` (52 px, about 5) and `xlarge` (64 px, about 4). |
 | `tz` | `EST5EDT,M3.2.0,M11.1.0` | POSIX TZ string, used for the clock, the daily-note timestamp, and new-note filenames. |
 | `sleep_min` | `10` | Idle minutes before deep sleep. 0 disables sleep. |
-| `wifi_idle_min` | `0` | Idle minutes before the Wi-Fi radio is stopped to save power, trading a few seconds of reconnect on the next note for a longer time between charges. 0 keeps it on. The status band reads "Wi-Fi off" and any button restarts it, but the settings page is unreachable until it does. Never fires when `sleep_min` is smaller and non-zero, because deep sleep comes first. |
+| `wifi_idle_min` | `0` | Idle minutes before the Wi-Fi radio is stopped to save power, trading a few seconds of reconnect on the next note for a longer time between charges. 0 keeps it on. The status band strikes through the aerial icon and any button restarts the radio, but the settings page is unreachable until it does. Never fires when `sleep_min` is smaller and non-zero, because deep sleep comes first. |
 | `beep` | on | Buzzer cues on record start, record stop, save, and error. |
 
 New notes are named `YYYY-MM-DD HHMM Voice note.md` and carry a small
