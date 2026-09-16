@@ -31,10 +31,10 @@ device works as a sticky note on your desk until you pick it up again.
 | --- | --- |
 | Hold the side (AI) button | Starts recording. The screen shows a level meter and the elapsed time. |
 | Release the side button | Stops recording and runs transcribe, optional cleanup, and save. |
-| Press Up | Pages back through a long note. At the top of the note it shows the info screen instead: Wi-Fi network and IP, settings page address, battery, where notes are being saved, and the firmware version. The info screen closes on any button press, or after 12 seconds. |
+| Press Up | Pages back through a long note. At the top of the note it shows the info screen instead: Wi-Fi network, IP address, battery, where notes are being saved, and the firmware version. It stays up until you press a button, which returns you to the note. |
 | Press Down | Pages forward through a long note. After a failure it retries the failed stage instead: a failed transcribe retries from the audio, which is still in memory, and a failed save retries from the text, so nothing has to be spoken again. |
 | Hold Down for 3 seconds | Enters setup mode. The device stops its normal work, starts the "Sticky-Setup" Wi-Fi network, and shows the setup instructions. Holding Down again in setup mode restarts the device. |
-| Hold the side button for 5 seconds | Powers off. Press the side button again to turn it back on. |
+| Hold Up for 3 seconds | Powers off. Press the side button to turn it back on. The side button cannot do this, because holding it is how you record. |
 
 Recordings shorter than about a third of a second are discarded, and a single
 recording stops at 90 seconds. The raw transcript appears on screen as soon
@@ -46,16 +46,6 @@ showing the last note. Press the side button to wake it. If you keep the
 button held down while it wakes, it starts recording as soon as the
 microphone is up, so a wake-and-speak gesture works as one motion. The idle
 timeout is configurable, and setting it to 0 disables sleep entirely.
-
-A second idle timeout can stop the Wi-Fi radio without sleeping the device,
-which trades a few seconds of reconnect before the first note for a
-noticeably longer time between charges. It is off by default. The status band
-reads "Wi-Fi off" while the radio is stopped, and pressing any button brings
-it back; a recording started in that state reconnects on its own before it
-uploads. The settings page is unreachable in the meantime, so press a button
-on the device first if you want to change something. If the sleep timeout is
-the shorter of the two, the device is already asleep by the time the Wi-Fi
-timeout would fire, and the radio setting never has an effect.
 
 ## What you need
 
@@ -173,10 +163,10 @@ curl -X POST http://<device-ip>/api/show --data-binary "Hello 你好"
 | `obs_mode` | `daily` | `daily` appends a line to today's daily note. `note` creates a new file. |
 | `obs_folder` | `Inbox` | Vault folder for new notes. Used only in `note` mode. Empty puts notes at the vault root. |
 | `obs_line` | `- **{time}** {text}` | Template for the daily-note line. `{time}` becomes `HH:MM` and `{text}` becomes the transcript with newlines flattened to spaces. Used only in `daily` mode. |
-| `text_size` | `medium` | Note text size on the screen: `small` (30 px, about 8 lines per page), `medium` (40 px, about 6), `large` (52 px, about 5), or `xlarge` (64 px, about 4). |
+| `text_size` | `medium` | Note text size on the screen: `small` (30 px, about 9 lines per page), `medium` (40 px, about 7), `large` (52 px, about 5), or `xlarge` (64 px, about 4). |
 | `tz` | `EST5EDT,M3.2.0,M11.1.0` | POSIX TZ string, used for the clock, the daily-note timestamp, and new-note filenames. |
 | `sleep_min` | `10` | Idle minutes before deep sleep. 0 disables sleep. |
-| `wifi_idle_min` | `0` | Idle minutes before the Wi-Fi radio is stopped to save power. 0 keeps it on. Any button restarts it. Has no effect when `sleep_min` is smaller and non-zero, since deep sleep comes first. |
+| `wifi_idle_min` | `0` | Idle minutes before the Wi-Fi radio is stopped to save power, trading a few seconds of reconnect on the next note for a longer time between charges. 0 keeps it on. The status band reads "Wi-Fi off" and any button restarts it, but the settings page is unreachable until it does. Never fires when `sleep_min` is smaller and non-zero, because deep sleep comes first. |
 | `beep` | on | Buzzer cues on record start, record stop, save, and error. |
 
 New notes are named `YYYY-MM-DD HHMM Voice note.md` and carry a small

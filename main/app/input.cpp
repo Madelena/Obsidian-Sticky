@@ -15,9 +15,10 @@ namespace {
 
 constexpr const char *kTag = "input";
 constexpr uint16_t kShortPressMs = 180;
-constexpr uint16_t kAiHoldMs = 5000;
-constexpr uint16_t kUpHoldMs = 3000;
-constexpr uint16_t kDownHoldMs = 3000;
+// The AI button cannot carry a long press: holding it is how you record, and
+// the release drain in pipeline.cpp swallows anything queued behind it. Power
+// off lives on Up instead, matching setup mode on Down.
+constexpr uint16_t kHoldMs = 3000;
 
 QueueHandle_t s_queue = nullptr;
 button_handle_t s_ai = nullptr;
@@ -67,15 +68,15 @@ esp_err_t init()
         return ESP_ERR_NO_MEM;
     }
 
-    ESP_RETURN_ON_ERROR(create(PIN_POWER_BTN, kAiHoldMs, &s_ai), kTag, "ai button");
+    ESP_RETURN_ON_ERROR(create(PIN_POWER_BTN, kHoldMs, &s_ai), kTag, "ai button");
     ESP_RETURN_ON_ERROR(on(s_ai, BUTTON_PRESS_DOWN, Event::AiDown), kTag, "ai down");
     ESP_RETURN_ON_ERROR(on(s_ai, BUTTON_PRESS_UP, Event::AiUp), kTag, "ai up");
-    ESP_RETURN_ON_ERROR(on(s_ai, BUTTON_LONG_PRESS_START, Event::AiHeld), kTag, "ai held");
 
-    ESP_RETURN_ON_ERROR(create(PIN_BTN_UP, kUpHoldMs, &s_up), kTag, "up button");
+    ESP_RETURN_ON_ERROR(create(PIN_BTN_UP, kHoldMs, &s_up), kTag, "up button");
     ESP_RETURN_ON_ERROR(on(s_up, BUTTON_SINGLE_CLICK, Event::UpClick), kTag, "up click");
+    ESP_RETURN_ON_ERROR(on(s_up, BUTTON_LONG_PRESS_START, Event::UpHeld), kTag, "up held");
 
-    ESP_RETURN_ON_ERROR(create(PIN_BTN_DOWN, kDownHoldMs, &s_down), kTag, "down button");
+    ESP_RETURN_ON_ERROR(create(PIN_BTN_DOWN, kHoldMs, &s_down), kTag, "down button");
     ESP_RETURN_ON_ERROR(on(s_down, BUTTON_SINGLE_CLICK, Event::DownClick), kTag, "down click");
     ESP_RETURN_ON_ERROR(on(s_down, BUTTON_LONG_PRESS_START, Event::DownHeld), kTag, "down held");
     return ESP_OK;

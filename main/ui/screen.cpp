@@ -24,8 +24,10 @@ constexpr int kMargin = 36;
 constexpr int kStatusHeight = 76;
 constexpr int kCaptionTop = kStatusHeight + 12;
 constexpr int kBlockGap = 6;
-constexpr int kBodyTop = kStatusHeight + 18;
-constexpr int kBodyBottom = canvas::kHeight - 24;
+// Twelve above and below is what fits 9, 7, 5 and 4 lines of the four faces
+// while leaving the lowest ink, a full medium page, 12 px clear of the edge.
+constexpr int kBodyTop = kStatusHeight + 12;
+constexpr int kBodyBottom = canvas::kHeight - 12;
 constexpr int kMeterWidth = 220;
 
 std::string s_note;
@@ -214,7 +216,8 @@ void show_message(const std::string &title, const std::vector<std::string> &line
     canvas::draw_text(font::title(), kMargin, 18, text::prepare(title).c_str());
     canvas::fill_rect(kMargin, kStatusHeight - 2, canvas::kWidth - 2 * kMargin, 2);
 
-    // The only place the firmware version and LAN address are shown.
+    // The only place the firmware version is shown. The address belongs to
+    // whichever caller wants it, so it is not repeated here.
     const int stamp_top = kBodyBottom - font::small().height;
     int y = kBodyTop;
     const int width = canvas::kWidth - 2 * kMargin;
@@ -227,8 +230,7 @@ void show_message(const std::string &title, const std::vector<std::string> &line
             y += font::body().line_height;
         }
     }
-    const std::string stamp =
-        std::string("v") + esp_app_get_description()->version + "  " + wifi::ip();
+    const std::string stamp = std::string("v") + esp_app_get_description()->version;
     canvas::draw_text(font::small(), kMargin, stamp_top, stamp.c_str());
     display::refresh_full();
 }

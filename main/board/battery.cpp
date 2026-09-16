@@ -16,6 +16,8 @@ namespace battery {
 namespace {
 
 constexpr const char *kTag = "battery";
+// Below this the gauge is reporting noise around zero, not a charge.
+constexpr int16_t kChargingMinMa = 10;
 i2c_master_dev_handle_t s_device = nullptr;
 int s_percent = -1;
 bool s_charging = false;
@@ -61,13 +63,14 @@ void poll()
                     ? std::min<int>(value, 100)
                     : -1;
 
-    // The charger's own status pin cannot tell "complete" from "disabled", so
-    // the gauge answers instead: DSG is set while the pack is discharging, and
-    // a clear bit with a cable attached is the only unambiguous charging this
-    // board can report. A failed read says not charging rather than guessing.
-    battery_status_t status = {};
+    // Signed current, not the discharge bit: a full pack sitting on a cable is
+    // not discharging either, so the bit alone reads as charging forever. The
+    // gauge reports current positive only while charge flows into the pack,
+    // with a threshold to ignore the noise around zero. A failed read says not
+    // charging rather than guessing.
+    int16_t current_ma = 0;
     s_charging = s_device != nullptr && on_usb() &&
-                 bq27220_read_battery_status(s_device, status.full) && !status.DSG;
+                 bq27220_read_current_ma(s_device, current_ma) && current_ma > kChargingMinMa;
 }
 
 

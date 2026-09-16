@@ -16,9 +16,9 @@ enum class Event : uint8_t {
     None,
     AiDown,     // AI button pressed: start recording immediately
     AiUp,       // AI button released: stop recording
-    AiHeld,     // AI button held 5 s: power off
-    UpClick,    // Up button: show the info screen
-    DownClick,  // Down button: retry the failed stage
+    UpClick,    // Up button: page back, or show the info screen
+    UpHeld,     // Up button held 3 s: power off
+    DownClick,  // Down button: page forward, or retry the failed stage
     DownHeld,   // Down button held 3 s: enter setup mode
 };
 

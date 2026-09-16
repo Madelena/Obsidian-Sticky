@@ -39,7 +39,6 @@ namespace {
 constexpr const char *kTag = "pipeline";
 constexpr uint32_t kMinRecordingMs = 300;
 constexpr uint32_t kWifiWaitMs = 20000;
-constexpr uint32_t kInfoScreenMs = 12000;
 constexpr const char *kSetupSsid = "Sticky-Setup";
 constexpr const char *kNvsNamespace = "sticky";
 constexpr const char *kNvsNoteKey = "last_note";
@@ -54,6 +53,7 @@ std::atomic<bool> s_capture_stop{false};
 std::atomic<bool> s_capture_done{true};
 bool s_setup_mode = false;
 bool s_radio_off = false;
+bool s_info_showing = false;
 
 // Buckets the charge so the panel is repainted on a visible change rather
 // than on every percent, and keeps an unreadable gauge distinct from a flat
@@ -271,19 +271,18 @@ void show_info()
     const settings::Values s = settings::get();
     const int percent = battery::percent();
     std::vector<std::string> lines = {
-        "Wi-Fi: " + (wifi::connected() ? s.wifi_ssid + " (" + wifi::ip() + ")" : std::string("not connected")),
+        "Wi-Fi: " + (wifi::connected() ? s.wifi_ssid : std::string("not connected")),
         "Battery: " + (percent >= 0 ? std::to_string(percent) + "%" : std::string("n/a")) +
-            (battery::on_usb() ? " on USB" : ""),
+            (battery::charging() ? " charging" : (battery::on_usb() ? " on USB" : "")),
         "Saving to: " + (s.obs_mode == "daily" ? std::string("daily note") : "new notes in " + s.obs_folder),
-        "Hold Down 3 s for setup mode. Hold the side button 5 s to power off.",
+        "Hold Up 3 s to power off. Hold Down 3 s for setup mode.",
     };
     if (wifi::connected()) {
-        lines.insert(lines.begin() + 1, "Settings page: http://" + wifi::ip() + "/");
+        lines.insert(lines.begin() + 1,
+                     "IP address: " + wifi::ip() + " (visit address for settings)");
     }
     screen::show_message("Obsidian Sticky", lines);
-    input::Event event = input::Event::None;
-    input::wait(event, pdMS_TO_TICKS(kInfoScreenMs));
-    screen::show(s_retry_stage == Stage::None ? "Ready" : "Retry with Down", -1, true);
+    s_info_showing = true;
 }
 
 // Switches to SoftAP with the captive portal until reboot.
@@ -375,22 +374,31 @@ void run(void *)
                 shown_battery = battery_step();
                 shown_charging = battery::charging();
                 shown_usb = battery::on_usb();
-                screen::redraw();
+                // Trackers still move while the info screen is up, so
+                // dismissing it does not trigger a second repaint.
+                if (!s_info_showing) {
+                    screen::redraw();
+                }
             }
             continue;
         }
         power::note_activity();
         wake_radio();
+        // The info screen stays up until a button dismisses it, so the first
+        // press after it appears returns to the note instead of acting. A
+        // record press is the exception: it goes straight to recording.
+        if (s_info_showing) {
+            s_info_showing = false;
+            if (event != input::Event::AiDown) {
+                screen::show(s_retry_stage == Stage::None ? "Ready" : "Retry with Down", -1, true);
+                continue;
+            }
+        }
         switch (event) {
         case input::Event::AiDown:
             if (!s_setup_mode) {
                 record_and_process();
             }
-            break;
-        case input::Event::AiHeld:
-            screen::show_message("Powering off", {"Hold the side button to turn back on."});
-            display::sleep();
-            board::power_off();
             break;
         // Up and Down page through a long note; at the top Up opens the info
         // screen, and after a failure Down retries instead of paging.
@@ -398,6 +406,11 @@ void run(void *)
             if (!s_setup_mode && !screen::scroll(-1)) {
                 show_info();
             }
+            break;
+        case input::Event::UpHeld:
+            screen::show_message("Powering off", {"Press the side button to turn back on."});
+            display::sleep();
+            board::power_off();
             break;
         case input::Event::DownClick:
             if (s_setup_mode) {
