@@ -45,6 +45,7 @@ Values defaults()
     v.obs_line = "- **{time}** {text}";
     v.device_name = kProductName;
     v.text_size = "auto";
+    v.text_font = "inter";
     v.tz = "EST5EDT,M3.2.0,M11.1.0";
     return v;
 }
@@ -65,8 +66,24 @@ constexpr StringField kStrings[] = {
     {"obs_key", &Values::obs_key, true},       {"obs_mode", &Values::obs_mode, false},
     {"obs_folder", &Values::obs_folder, false}, {"obs_line", &Values::obs_line, false},
     {"tz", &Values::tz, false},           {"text_size", &Values::text_size, false},
-    {"device_name", &Values::device_name, false},
+    {"text_font", &Values::text_font, false}, {"device_name", &Values::device_name, false},
 };
+
+// Accepted `text_font` values, matching font::family_from_name() in
+// main/ui/font.cpp.
+constexpr const char *kFonts[] = {"inter", "atkinson", "opensans", "literata",
+                                  "shantell"};
+
+// Reports whether a family name is one this firmware has faces baked for.
+bool known_font(const std::string &name)
+{
+    for (const char *candidate : kFonts) {
+        if (name == candidate) {
+            return true;
+        }
+    }
+    return false;
+}
 
 // Trims a device name and falls back to the product name, so the info screen
 // always has a heading and never one too wide for the band.
@@ -150,6 +167,11 @@ esp_err_t init()
         loaded.text_size != "medium" && loaded.text_size != "large" &&
         loaded.text_size != "xlarge") {
         loaded.text_size = "auto";
+    }
+    // Firmware older than the family switch stored no key at all, so upgrading
+    // a device lands here and visibly changes its face from Atkinson to Inter.
+    if (!known_font(loaded.text_font)) {
+        loaded.text_font = "inter";
     }
     std::lock_guard<std::mutex> lock(s_mutex);
     s_values = loaded;
@@ -271,6 +293,10 @@ bool apply_json(const char *json, std::string &error)
     if (v.text_size != "auto" && v.text_size != "small" && v.text_size != "medium" &&
         v.text_size != "large" && v.text_size != "xlarge") {
         error = "text_size must be auto, small, medium, large or xlarge";
+        return false;
+    }
+    if (!known_font(v.text_font)) {
+        error = "text_font must be one of inter, atkinson, opensans, literata, shantell";
         return false;
     }
     if (v.llm_kind != "anthropic" && v.llm_kind != "openai") {

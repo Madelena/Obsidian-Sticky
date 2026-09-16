@@ -40,8 +40,8 @@ constexpr const char *kTag = "cjk_font";
 // `font` row in partitions.csv.
 constexpr esp_partition_subtype_t kFontSubtype = static_cast<esp_partition_subtype_t>(0x40);
 
-// Side of the square rasterization scratch, comfortably over the 81 px tall
-// glyphs of the xxlarge face in ui/fonts/font_xxlarge.h.
+// Side of the square rasterization scratch, comfortably over the 82 px box of
+// the xxlarge face, which the FACES table in tools/gen_font.py sets.
 constexpr int kScratchDim = 112;
 
 constexpr uint32_t kSfntVersion = 0x00010000;  // Plain TrueType outlines

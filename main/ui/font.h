@@ -27,9 +27,31 @@ struct Font {
 
 namespace font {
 
+// The baked Latin families, in the order the `text_font` setting names them.
+// Chinese is unaffected: it comes from the `font` partition through cjk_font.h
+// whichever of these is active.
+enum class Family {
+    kInter,
+    kAtkinson,
+    kOpenSans,
+    kLiterata,
+    kShantell,
+};
+
+// FAMILY SELECTOR
+// Points the accessors below at one family's faces, ignoring an unknown name.
+// Call it before the first render and again after settings::save(), as
+// main.cpp and portal.cpp do; the accessors cache the choice because they run
+// per glyph and cannot afford settings::get().
+void set_family(Family family);
+
+// FAMILY NAME PARSER
+// Maps a `text_font` setting string to a family, defaulting to Inter.
+Family family_from_name(const char *name);
+
 // FONT ACCESSORS
-// Return the baked faces: 30 px regular, 30 px bold, 40 px bold, 22 px
-// regular, 40 px regular, 52 px regular, 64 px regular.
+// Return the active family's faces: 30 px regular, 30 px bold, 40 px bold,
+// 22 px regular, 40 px regular, 52 px regular, 64 px regular.
 const Font &body();
 const Font &title();
 const Font &heading();

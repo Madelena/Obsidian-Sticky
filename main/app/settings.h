@@ -41,6 +41,7 @@ struct Values {
 
     std::string device_name;  // Heading on the info screen, never empty
     std::string text_size;    // Note text: "auto", "small", "medium", "large" or "xlarge"
+    std::string text_font;    // Latin face: "inter" or "atkinson". Chinese ignores this.
     std::string tz;           // POSIX TZ string
     int sleep_min = 10;       // Idle minutes before deep sleep, 0 disables
     int wifi_idle_min = 0;    // Idle minutes before the radio stops, 0 disables

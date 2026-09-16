@@ -176,7 +176,8 @@ curl -X POST http://<device-ip>/api/show --data-binary "Hello 你好"
 | `obs_folder` | `Inbox` | Vault folder for new notes. Used only in `note` mode. Empty puts notes at the vault root. |
 | `obs_line` | `- **{time}** {text}` | Template for the daily-note line. `{time}` becomes `HH:MM` and `{text}` becomes the transcript with newlines flattened to spaces. Used only in `daily` mode. |
 | `device_name` | `Obsidian Sticky` | The heading on the device's info screen and the hostname it gives your router, so a household with more than one can tell them apart. Trimmed, capped at 32 bytes on a character boundary, and a blank field goes back to the default. The footer keeps saying `Obsidian Sticky` and the firmware version whatever you rename it to. The hostname keeps letters and digits and turns every other run of characters into a single hyphen, so "Fridge Note" becomes `Fridge-Note`; a name with no Latin characters falls back to `Obsidian-Sticky`. Your router sees the new name at the next DHCP lease, so restart the device after renaming it. |
-| `text_size` | `auto` | Note text size on the screen. `auto` picks the largest size that shows the whole note at once. The fixed sizes are `small` (30 px, about 9 lines), `medium` (40 px, about 7), `large` (52 px, about 5) and `xlarge` (64 px, about 4). |
+| `text_size` | `auto` | Note text size on the screen. `auto` picks the largest size that shows the whole note at once. The fixed sizes are named by how much they fit: `small` (about 9 lines), `medium` (about 7), `large` (about 5) and `xlarge` (about 4). |
+| `text_font` | `inter` | Typeface for Latin text: `inter`, `atkinson` (Atkinson Hyperlegible), `opensans`, `literata` (serif) or `shantell` (Shantell Sans, handwriting). All five are baked to the same capital height, so switching changes the letterforms and not the size or the lines that fit. Chinese ignores this and always uses Noto Sans TC. |
 | `tz` | `EST5EDT,M3.2.0,M11.1.0` | POSIX TZ string, used for the clock, the daily-note timestamp, and new-note filenames. |
 | `sleep_min` | `10` | Idle minutes before deep sleep. 0 disables sleep. |
 | `wifi_idle_min` | `0` | Idle minutes before the Wi-Fi radio is stopped to save power, trading a few seconds of reconnect on the next note for a longer time between charges. 0 keeps it on. The status band strikes through the aerial icon and any button restarts the radio, but the settings page is unreachable until it does. Never fires when `sleep_min` is smaller and non-zero, because deep sleep comes first. |
@@ -223,8 +224,9 @@ Notes:
 ## Chinese and other scripts
 
 English and the rest of ASCII are drawn from bitmap fonts baked into the
-firmware. Everything above U+007F is drawn from a TrueType font that lives in
-its own 8 MB flash partition and is rasterized as the screen is painted, so
+firmware, in whichever of the five families `text_font` names. Everything above
+U+007F ignores that setting and is drawn from a TrueType font that lives in its
+own 8 MB flash partition and is rasterized as the screen is painted, so
 Chinese, Japanese and Korean text needs that partition to be flashed.
 
 The font is Noto Sans TC, which covers traditional and simplified Chinese as

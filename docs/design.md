@@ -143,12 +143,22 @@ on a slightly different line.
 
 Four faces, selectable as `text_size` on the settings page, plus `auto`.
 
-| Setting | Face in code | Nominal | Lines per screen |
-| --- | --- | --- | --- |
-| small | `font::body()` | 30 px | 9 |
-| medium | `font::large()` | 40 px | 7 |
-| large | `font::xlarge()` | 52 px | 5 |
-| xlarge | `font::xxlarge()` | 64 px | 4 |
+| Setting | Face in code | Called | Cap height | Box | Lines per screen |
+| --- | --- | --- | --- | --- | --- |
+| small | `font::body()` | 30 px | 22 px | 38 px | 9 |
+| medium | `font::large()` | 40 px | 29 px | 50 px | 7 |
+| large | `font::xlarge()` | 52 px | 38 px | 66 px | 5 |
+| xlarge | `font::xxlarge()` | 64 px | 47 px | 82 px | 4 |
+
+The px name in the third column is what the rest of these docs call each face
+and is Inter's nominal size, kept because it is the established vocabulary.
+The fixed quantities are the last three columns; the nominal size a family is
+actually baked at varies, and is in each generated header's banner.
+
+The settings page names each option by its line count alone, not by a pixel
+size. Lines per screen is the thing the reader is actually choosing, and a
+pixel size now means nothing to them: it is neither what any family is baked
+at nor what the letters measure. Do not put it back.
 
 `auto` is the default. It wraps the note at each face from largest down and
 keeps the first that shows the whole thing at once, so a four-word note fills
@@ -178,19 +188,64 @@ The default is medium, which puts the same physical size on screen as the
 previous default did under its old name. The 22 px face itself was not
 removed, it is still the caption and status-band face.
 
-Line pitch is 1.10 times the glyph box, emitted by `tools/gen_font.py` into
-each face's `line_height`. It was tightened from 1.15 to fit more lines. The
+Line pitch is a fixed number per face in the `FACES` table of
+`tools/gen_font.py`, baked into each face's `line_height`. It started as 1.10
+times the glyph box, tightened from 1.15 to fit more lines, and was frozen at
+those values when the families became switchable. The
 lines-per-page arithmetic charges the last line only its glyph box rather
 than a full pitch, which is what fits a fifth 52 px line into the band; the
 formula and the per-face numbers are in `docs/hardware.md`.
 
-The Latin faces are Atkinson Hyperlegible, chosen for legibility at a glance
-and because its licence is OFL. They are baked to 1-bit bitmaps at build time
-by `tools/gen_font.py`, ASCII only, U+0020 to U+007E. Everything above U+007F
-is rasterized at draw time from a Noto Sans TC subset in the `font` flash
-partition, so Chinese notes are readable on screen and not merely correct in
-the vault. Without that partition `text::prepare()` folds those code points
-to ASCII approximations rather than failing.
+### The Latin family is a setting, and every family is the same size
+
+Five families, chosen as `text_font` on the settings page, all OFL:
+
+| Setting | Family | Why |
+| --- | --- | --- |
+| `inter` | Inter | The default. A neo-grotesque, and the crispest at the 22 px face once the rasterizer has thresholded the anti-aliasing away. |
+| `atkinson` | Atkinson Hyperlegible | Drawn by the Braille Institute for low vision. Wide apertures, a slashed zero, the original choice here. |
+| `opensans` | Open Sans | The humanist sans. Warmer and more open than Inter without giving up much width. |
+| `literata` | Literata | The serif, drawn by TypeTogether for e-readers, so its strokes stay even at 1 bit. |
+| `shantell` | Shantell Sans | The handwriting face, for a device that is a sticky note. |
+
+Source Serif 4 was baked and then dropped: next to Literata it read as the
+same idea done slightly lighter, and one serif is enough.
+
+Inter replaced Atkinson as the default because Atkinson's letterforms, and its
+slashed zero in particular, read as clinical in prose. Atkinson stays because
+its legibility is the point for anyone who needs it.
+
+Nominal point size is the wrong knob and is not used. The same number means
+something different in each family: at 30 px Literata's glyph box is 46 px
+against Inter's 38 px, yet both put a 22 px capital on the screen, and the
+capital is what the eye reads as size. So `tools/gen_font.py` is given a
+target cap height and solves for the point size that hits it, per family and
+per weight. Atkinson came out visibly small for years because it shared a
+nominal number with a face whose capitals are taller.
+
+Every family also bakes into the same fixed glyph box, baseline row and line
+pitch, listed in that tool's `FACES` table. That is what keeps the
+lines-per-screen column above true for all five: `Font::height` and
+`Font::line_height` no longer vary, so `fitting_lines()` and `auto` return the
+same answer whichever family is active. The boxes are the derived minimum that
+holds every family's ink, so adding a sixth may require widening one, and the
+generator refuses to emit a clipped glyph rather than shipping one. The order
+of `Family` in `main/ui/font.h` and of `kFamilies` in `main/ui/font.cpp` must
+match, and `kFonts` in `main/app/settings.cpp` holds the accepted names.
+
+Shantell is pinned at `BNCE 45` and `INFM 25`, so its glyphs sit at slightly
+different heights and the line looks written rather than set. The bounce is
+what drove the 52 px and 64 px boxes one pixel wider than the other families
+needed, because a bounced descender hangs lower.
+
+All five are baked to 1-bit bitmaps at build time, ASCII only, U+0020 to
+U+007E, at about 120 KB per family. Everything above U+007F ignores the
+setting and is rasterized at draw time from a Noto Sans TC subset in the
+`font` flash partition, so Chinese notes are readable on screen and not merely
+correct in the vault. The partition holds one font and no more, so the Latin
+choice is deliberately independent of it rather than paired with it. Without
+that partition `text::prepare()` folds those code points to ASCII
+approximations rather than failing.
 
 ## Feedback, which is the heart of the interaction
 

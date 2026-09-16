@@ -21,6 +21,7 @@
 #include "net/llm_client.h"
 #include "net/obsidian_client.h"
 #include "net/stt_client.h"
+#include "ui/font.h"
 #include "ui/screen.h"
 
 extern const char index_html_start[] asm("_binary_index_html_start");
@@ -100,9 +101,11 @@ esp_err_t handle_post_settings(httpd_req_t *req)
     std::string error;
     const bool ok = settings::apply_json(body.c_str(), error);
     if (ok) {
-        buzzer::set_enabled(settings::get().beep);
-        // A text size change should show at once, but not over the setup
-        // screen, which is a show_message screen with no note behind it.
+        const settings::Values saved = settings::get();
+        buzzer::set_enabled(saved.beep);
+        font::set_family(font::family_from_name(saved.text_font.c_str()));
+        // A text size or font change should show at once, but not over the
+        // setup screen, which is a show_message screen with no note behind it.
         if (!s_captive) {
             screen::refresh();
         }

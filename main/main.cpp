@@ -20,6 +20,7 @@
 #include "ui/canvas.h"
 #include "ui/cjk_font.h"
 #include "ui/display.h"
+#include "ui/font.h"
 #include "ui/screen.h"
 
 namespace {
@@ -52,6 +53,9 @@ extern "C" void app_main()
     ESP_ERROR_CHECK(settings::init());
     buzzer::init();
     buzzer::set_enabled(settings::get().beep);
+    // Before anything measures or draws text, because the faces differ in
+    // height and a wrap done under the wrong family would be laid out wrong.
+    font::set_family(font::family_from_name(settings::get().text_font.c_str()));
 
     // Mic before display so a wake-and-hold press loses as little as possible.
     ESP_ERROR_CHECK(clip::init());

@@ -237,23 +237,34 @@ is per face rather than fixed, for the reason in the next section, and
 | `xlarge` (large) | 52 px | 66 px | 16 px | y 20 | 73 px | 5 |
 | `xxlarge` (xlarge) | 64 px | 80 px | 19 px | y 17 | 88 px | 4 |
 
-The pitch is `round(1.10 * glyph box height)`, set in `tools/gen_font.py`. The
-glyph box is ascent plus descent at the nominal size, which is why it is
-larger than the nominal number.
+The pitch and the glyph box are fixed numbers per face in the `FACES` table of
+`tools/gen_font.py`, the same for every family, which is why the figures below
+need no per-family column.
 
-The medium face is the tight one. Seven of its lines need `6 * 55 + 50`, so
-380 px, and it is drawn from y 25, leaving 7 px spare. The other three have 11,
-34 and 51 px. Anything that lowers `bottom` by more than 7 px costs the medium
-face a line, and `auto` then falls through to the 30 px face a note sooner.
+Spare pixels under a full page, worst case across the five families:
+
+| Face | Box | Pitch | Lines | Drawn from | Spare |
+| --- | --- | --- | --- | --- | --- |
+| 30 px | 38 | 42 | 9 | y 28 | 10 |
+| 40 px | 50 | 54 | 7 | y 26 | 12 |
+| 52 px | 66 | 70 | 5 | y 23 | 43 |
+| 64 px | 82 | 86 | 4 | y 20 | 52 |
+
+The 30 px face is the binding one at 10 px, so anything that lowers `bottom`
+by more than that costs it a line and `auto` falls through a note sooner. The
+spare varies by a pixel between families, because a family whose capitals land
+a pixel short of the target gets a pixel more head margin; the column is the
+worst of the five.
 
 ### The head margin is set per face, because a glyph box is not its ink
 
 `canvas::draw_text()` places a line by the top of its glyph box, but the eye
-measures the margin to the ink. Every capital and ascender in Atkinson shares
-one top, and it sits 9, 11, 16 or 19 px below the box depending on the face,
-so a fixed head margin makes a short note in the 64 px face look tighter at
-the top than a long one in the 30 px face. Under `auto` the face moves with
-the note, so the top margin would visibly breathe as notes come and go.
+measures the margin to the ink. A capital sits 8, 10, 13 or 16 px below the top
+of the box depending on the face, so a fixed head margin would make a short
+note in the 64 px face look tighter at the top than a long one in the 30 px
+face. Ascenders reach 1 to 3 px above the capital, which is close enough that
+`cap_gap()` measures `H` and ignores them. Under `auto` the face moves with the
+note, so the top margin would visibly breathe as notes come and go.
 
 `margin_top()` in `main/ui/screen.cpp` therefore draws at `36 - cap_gap(face)`,
 which puts the ink of the first line 36 px down, the same as the 36 px it

@@ -87,9 +87,9 @@ int body_bottom()
     return s_caption.empty() ? bar_top() - kEdgeGap : caption_top() - kBlockGap;
 }
 
-// Counts the blank rows a face carries above the ink of a capital. Every
-// capital and ascender in Atkinson shares that top, so 'H' speaks for the
-// whole face.
+// Counts the blank rows a face carries above the ink of a capital, so the note
+// margin measures to the cap rather than to the glyph box. Ascenders reach 1 to
+// 3 px higher than 'H' in both families, which does not show at a 36 px margin.
 int cap_gap(const Font &face)
 {
     const FontGlyph &glyph = font::glyph(face, 'H');
