@@ -15,6 +15,7 @@ Everything after boot runs on these tasks.
 | `capture` | `record_and_process()` | 4096, 10 | The I2S PDM RX channel, for the length of one recording |
 | `render` | `display::init()` | 4096, 4 | SPI2 and the panel; the only task that waits out a waveform |
 | `warm` | `http::warm_async()` | 8192, 4 | Opening TLS connections during recording |
+| `touch` | `touch::init()` | 3072, 4 | I2C0, the GT911, and turning a finger into a swipe |
 | httpd | `portal::start()` | 16384, the HTTP server's own | The settings page, the JSON API, the three Test routes |
 
 Rules that follow from the split:
@@ -26,12 +27,17 @@ Rules that follow from the split:
 - **Button callbacks touch nothing.** They run in the button component's timer
   context, so `main/app/input.cpp` does one `xQueueSend` and returns. A
   display refresh or an I2C read from there deadlocks or trips the watchdog.
+- **Only `touch` holds the GT911.** The task owns the power pin, the I2C0 bus
+  and the device handle outright, and `touch::set_enabled()` only sets an
+  atomic that the task acts on. Nothing is locked because nothing else is a
+  candidate to touch it. That also keeps the 120 ms reset sequence off the
+  pipeline task, which is the one whose latency is measured.
 - **The httpd task draws.** `POST /api/show` and a settings save both call
   into `screen`, which is the one place a task other than `pipeline` paints.
-  The panel handoff is safe because it goes through the refresh mutex, but the
-  canvas itself has no lock, so a portal draw landing in the middle of a
-  pipeline draw would interleave. In practice the user is doing one or the
-  other. Anything that adds a third drawing caller should fix this properly.
+  The panel handoff is safe through the refresh mutex, and the canvas behind
+  it is serialized by `s_mutex` in `screen.cpp`, which every public entry
+  point takes. A new drawing caller needs nothing beyond going through
+  `screen`.
 
 ## The pipeline state machine
 
@@ -146,9 +152,28 @@ read everywhere through a mutex-guarded copy.
   blank secret as "keep what is stored".
 - **Unknown enumerated values fall back to a default** rather than leaving the
   renderer to guess. A `text_size` written by other firmware has no face here,
-  so `init()` forces it back to `medium` instead of letting
-  `screen::note_face()` pick blind. `apply_json()` rejects a bad value from
+  so `init()` forces it back to `auto` instead of letting
+  `screen::layout_note()` pick blind. `apply_json()` rejects a bad value from
   the portal outright, which is the different case: there a person can be told.
+
+## The touch panel is powered on demand
+
+`sync_touch()` runs once per pass of the pipeline event loop and asks for one
+thing: is a note that overflows the screen showing on the screen that
+scrolls. Nothing else decides, the same way one check owns every idle
+repaint.
+
+- **Powering it costs about 120 ms**, spent on the touch task, and only on a
+  transition. The loop calls `set_enabled()` every second with the same
+  answer and that is a store to an atomic.
+- **A failed bring-up latches.** If the GT911 does not answer once, it is not
+  asked again until the next boot, so a board with a dead panel does not pay
+  the reset sequence on every long note. A controller that answers but has no
+  configuration loaded is not a failure by this definition: it is powered and
+  polled, and simply never reports. The start-up line says which it is.
+- **Disable releases the bus and floats the pins.** The controller is
+  unpowered afterwards, and a pull-up left driving an unpowered chip is a
+  leak, which is why `float_pin()` clears what `gpio_reset_pin()` sets.
 
 ## Codecs
 

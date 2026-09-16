@@ -12,6 +12,11 @@
 
 namespace settings {
 
+// The firmware's own name. It is the default device name, and the info screen
+// stamps it under whatever the device has been renamed to, so a screen always
+// says what is running on it.
+constexpr const char *kProductName = "Obsidian Sticky";
+
 struct Values {
     std::string wifi_ssid;
     std::string wifi_pass;
@@ -34,7 +39,8 @@ struct Values {
     std::string obs_folder;   // New-note mode only
     std::string obs_line;     // Daily-mode template with {time} and {text}
 
-    std::string text_size;    // "small", "medium", "large" or "xlarge" note text
+    std::string device_name;  // Heading on the info screen, never empty
+    std::string text_size;    // Note text: "auto", "small", "medium", "large" or "xlarge"
     std::string tz;           // POSIX TZ string
     int sleep_min = 10;       // Idle minutes before deep sleep, 0 disables
     int wifi_idle_min = 0;    // Idle minutes before the radio stops, 0 disables

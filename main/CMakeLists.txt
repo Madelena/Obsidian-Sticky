@@ -9,6 +9,7 @@ idf_component_register(
         "board/board.cpp"
         "board/buzzer.cpp"
         "board/battery.cpp"
+        "board/touch.cpp"
         "audio/pdm_mic.cpp"
         "audio/clip.cpp"
         "ui/font.cpp"

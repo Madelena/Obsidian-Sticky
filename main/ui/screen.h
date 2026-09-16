@@ -2,8 +2,8 @@
 // SCREEN
 // =============================================================================
 // The one screen this device has: a status band, an optional caption, and the
-// last note. pipeline.cpp drives it; it owns the layout, the note paging, and
-// decides partial versus full refresh via display.cpp.
+// last note. pipeline.cpp drives it; it owns the layout, the note scrolling,
+// and decides partial versus full refresh via display.cpp.
 #pragma once
 
 #include <string>
@@ -12,7 +12,7 @@
 namespace screen {
 
 // NOTE SETTER
-// Stores the note text (UTF-8) shown in the body and rewinds to page one.
+// Stores the note text (UTF-8) shown in the body and rewinds to the top.
 void set_note(const std::string &note);
 
 // CAPTION SETTER
@@ -41,9 +41,14 @@ void refresh();
 // status band change such as Wi-Fi or battery that brings no new headline.
 void redraw();
 
+// NOTE OVERFLOW REPORTER
+// Reports whether the note drawn last runs past the body, which is what
+// pipeline.cpp uses to decide the touch panel is worth powering.
+bool scrollable();
+
 // NOTE SCROLLER
-// Moves delta pages through a note longer than the body and redraws with the
-// last status; returns false when the move is impossible.
+// Moves the note body by delta screens, one line of overlap each way, and
+// redraws with the last status; returns false when the move is impossible.
 bool scroll(int delta);
 
 // MESSAGE SHOWER

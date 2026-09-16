@@ -26,8 +26,8 @@ constexpr gpio_num_t kPossiblyHeldPins[] = {
     static_cast<gpio_num_t>(PIN_POWER_HOLD), static_cast<gpio_num_t>(PIN_POWER_LOCK),
     static_cast<gpio_num_t>(PIN_POWER_BTN),  static_cast<gpio_num_t>(PIN_EPD_EN),
     static_cast<gpio_num_t>(PIN_TOUCH_EN),   static_cast<gpio_num_t>(PIN_TOUCH_RST),
-    static_cast<gpio_num_t>(PIN_MIC_EN),     static_cast<gpio_num_t>(PIN_SD_EN),
-    static_cast<gpio_num_t>(PIN_BUZZER),
+    static_cast<gpio_num_t>(PIN_TOUCH_INT),  static_cast<gpio_num_t>(PIN_MIC_EN),
+    static_cast<gpio_num_t>(PIN_SD_EN),      static_cast<gpio_num_t>(PIN_BUZZER),
 };
 
 // Configures one push-pull output and sets its level.
@@ -87,8 +87,9 @@ esp_err_t init()
         return err;
     }
 
-    // Park the SD card and touch controller: both share buses with things we
-    // do use, and a floating chip select corrupts panel transfers.
+    // Park the SD card and touch controller: a floating chip select corrupts
+    // panel transfers, and board/touch.cpp expects to find the panel off and
+    // to raise PIN_TOUCH_EN itself when a note needs scrolling.
     ESP_RETURN_ON_ERROR(configure_output(PIN_SD_CS, 1), kTag, "sd cs");
     ESP_RETURN_ON_ERROR(configure_output(PIN_SD_EN, 1), kTag, "sd en");
     ESP_RETURN_ON_ERROR(configure_output(PIN_TOUCH_EN, 0), kTag, "touch en");

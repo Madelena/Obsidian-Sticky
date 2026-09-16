@@ -11,6 +11,7 @@
 #include "board/battery.h"
 #include "board/board.h"
 #include "board/buzzer.h"
+#include "board/touch.h"
 #include "esp_app_desc.h"
 #include "esp_check.h"
 #include "esp_log.h"
@@ -67,6 +68,9 @@ extern "C" void app_main()
     if (battery::init(board::sensor_i2c_bus()) != ESP_OK) {
         ESP_LOGW(kTag, "Battery gauge unavailable");
     }
+    // Creates the task only; pipeline.cpp powers the panel when a note that
+    // overflows the screen is actually on it.
+    ESP_ERROR_CHECK(touch::init());
     ESP_ERROR_CHECK(wifi::init());
 
     ESP_ERROR_CHECK(pipeline::start());

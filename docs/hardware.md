@@ -49,11 +49,11 @@ not replace them.
 
 | Signal | GPIO | Notes |
 | --- | --- | --- |
-| `PIN_TOUCH_SCL` | 2 | GT911. Unused by this firmware. |
+| `PIN_TOUCH_SCL` | 2 | GT911, on I2C0. The bus is created and deleted with the power, in `main/board/touch.cpp`. |
 | `PIN_TOUCH_SDA` | 3 | |
-| `PIN_TOUCH_EN` | 42 | Driven low at boot to keep the controller powered off. |
-| `PIN_TOUCH_INT` | 21 | |
-| `PIN_TOUCH_RST` | 41 | Driven low at boot. |
+| `PIN_TOUCH_EN` | 42 | Low at boot. Raised only while a note on screen scrolls. |
+| `PIN_TOUCH_INT` | 21 | Output during reset, where its level picks the I2C address, then the controller's own interrupt output. |
+| `PIN_TOUCH_RST` | 41 | Low at boot. |
 
 ### E-paper panel on SPI2
 
@@ -217,17 +217,19 @@ addresses 16 MB and the partition's tail lies beyond it. `cjk_font::init()`
 therefore reads the TrueType table directory at the start of the partition,
 computes the real file length from it, and maps only that.
 
-### Lines per page charges the last line only its glyph box
+### Lines per screen charges the last line only its glyph box
+
+`fitting_lines()` in `main/ui/screen.cpp`:
 
 ```
-per_page = (bottom - top - face.height) / pitch + 1
+fits = (bottom - top - face.height) / pitch + 1
 ```
 
 Pitch is the distance to the *next* line, so only the lines before the last
 one need it. With 12 px margins above and below the body, this is what fits a
 fifth 52 px line into the same band.
 
-| Face | Nominal | Glyph box | Pitch | Lines per page |
+| Face | Nominal | Glyph box | Pitch | Lines per screen |
 | --- | --- | --- | --- | --- |
 | `body` (small) | 30 px | 38 px | 42 px | 9 |
 | `large` (medium) | 40 px | 50 px | 55 px | 7 |
@@ -237,6 +239,88 @@ fifth 52 px line into the same band.
 The pitch is `round(1.10 * glyph box height)`, set in `tools/gen_font.py`. The
 glyph box is ascent plus descent at the nominal size, which is why it is
 larger than the nominal number.
+
+### The GT911 reports no configuration, so it never reports a touch
+
+The one unit tested answers I2C perfectly and never produces a coordinate,
+under this firmware and under Seeed's. Its owner reports that touch worked on
+this device previously. The state, read back over thousands of polls with zero
+read failures:
+
+| Register | Reads | Should be |
+| --- | --- | --- |
+| 0x8140 product ID | `911` | `911` |
+| 0x8144 firmware | 0x1060 | a version |
+| 0x8047 config, 24 bytes | all zero | a config table |
+| 0x804C touch points | 0 | 1 to 5 |
+| 0x80FF checksum, 0x8100 fresh | 0x00, 0x00 | non-zero |
+| 0x8146 resolution | 0 by 0 | 800 by 480 |
+| 0x814A vendor | 0xFF | a vendor |
+| 0x814E status | 0x00, always | bit 7 on touch |
+
+A GT911 with no configuration does not know its sensor geometry and does not
+scan, which is why an interrupt counter on `PIN_TOUCH_INT` records zero edges
+while the glass is being swiped. This is not a driver bug. What was ruled out,
+each on hardware:
+
+- **Not the bus.** Thousands of reads, zero failures, and the product ID and
+  firmware version come back correct from the same burst read whose later
+  bytes are zero.
+- **Not the address.** Both 0x5D and 0x14 answer, with identical contents.
+- **Not the power rail.** With `PIN_TOUCH_EN` low the chip does not answer at
+  all (`ESP_ERR_NOT_FOUND`), so the pin really does power it and is active
+  high, and it is not running on parasitic current through the pull-ups.
+- **Not power-up timing.** 250 ms after the rail rises, matching Seeed's own
+  driver, changes nothing, and neither does releasing `PIN_TOUCH_RST` across
+  the whole power-on rather than letting board.cpp hold it low.
+- **Not the command register.** 0x8040 reads 0x00, which is coordinate mode,
+  and writing 0x00 to it changes nothing.
+- **Not a late load.** Re-reading the config every two seconds for minutes
+  shows it blank throughout.
+
+**Seeed's own firmware gets nothing either.** Their 2048 game, built from
+source at v1.0.1 and flashed to the same unit, drives its whole UI from
+swipes and logs every touch at INFO. Across a 57-second session of
+deliberate swiping it logged not one `touch down`, only the AI-button presses.
+Two independent drivers, the same silence, so this is the device and not this
+firmware.
+
+Their driver also prints `sensor=2048x2048`, which is the hardcoded fallback
+in their `GT911` class, used when the resolution read returns zero. That is
+not evidence that a blank config is normal: it only shows their driver read
+the same zeros on this unit. A healthy GT911 holds a config version at 0x8047
+and its output resolution at 0x8048, and Seeed's own code comments expect
+real values there. A controller that has lost its configuration is still the
+best explanation.
+
+Neither firmware writes to the configuration region. This one only ever writes
+0x8040 (command) and 0x814E (status buffer), never 0x8047 to 0x8100, so
+nothing here can have erased it.
+
+Writing a configuration from the host would mean supplying the panel's sensor
+parameters, which are not published, and committing them to the controller's
+flash. That is not worth attempting blind on a device that is more likely to
+want a warranty claim.
+
+### The GT911 answers at 0x14, and INT picks that during reset
+
+The address is selected by the level on `PIN_TOUCH_INT` while `PIN_TOUCH_RST`
+rises: low selects 0x5D and high selects 0x14. Measured on this board, it
+comes up at **0x14** with the ID register reading `911`. `touch.cpp` still
+tries both, because the level is only sampled across that one edge and a
+missed edge would otherwise be a dead panel rather than a retry.
+
+The sequence, with Seeed's timings, is RST low and INT at the chosen level for
+20 ms, RST high for 20 ms, then INT back to an input and 80 ms to settle.
+That is about 120 ms per address tried, which is why the last address that
+answered is tried first on the next power-up.
+
+Its resolution register (0x8146) should report the sensor's own frame, and
+Seeed's driver notes that a working controller maps its native 480 by 800
+sensor into an 800 by 480 range. On this unit it reads zero, per the section
+above, so neither the axis mapping nor `kInvertY` in `main/board/touch.cpp`
+has ever been checked against a real coordinate. Both are guesses until one
+arrives.
 
 ### The panel blocks the calling task for the whole waveform
 

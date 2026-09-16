@@ -71,8 +71,10 @@
 
   <fieldset>
     <legend>Device</legend>
-    <label>Note text size<select id="text_size"><option value="small">Small (30 px, about 9 lines)</option><option value="medium">Medium (40 px, about 7 lines)</option><option value="large">Large (52 px, about 5 lines)</option><option value="xlarge">Extra large (64 px, about 4 lines)</option></select></label>
-    <p class="hint">Longer notes are paged; press Up and Down on the device to scroll.</p>
+    <label>Device name<input id="device_name" maxlength="32" placeholder="Obsidian Sticky"></label>
+    <p class="hint">The heading on the device's info screen, and the name it gives your router, so you can often reach this page at http://thename/ instead of the IP address. Letters and digits become the hostname and everything else becomes a hyphen. The router only sees a new name after the device restarts. Leave it blank to go back to Obsidian Sticky.</p>
+    <label>Note text size<select id="text_size"><option value="auto">Auto (largest that fits the note)</option><option value="small">Small (30 px, about 9 lines)</option><option value="medium">Medium (40 px, about 7 lines)</option><option value="large">Large (52 px, about 5 lines)</option><option value="xlarge">Extra large (64 px, about 4 lines)</option></select></label>
+    <p class="hint">Auto picks the largest size that shows the whole note at once. A note too long for one screen scrolls: swipe up and down on the device's screen.</p>
     <label>Time zone (POSIX TZ)<input id="tz"></label>
     <label>Sleep after idle minutes (0 = never)<input id="sleep_min" type="number" min="0"></label>
     <label>Turn Wi-Fi off after idle minutes (0 = never)<input id="wifi_idle_min" type="number" min="0"></label>
@@ -87,7 +89,7 @@
   </div>
 </main>
 <script>
-const text = ["wifi_ssid","stt_url","stt_model","stt_lang","llm_kind","llm_url","llm_model","llm_prompt","obs_url","obs_mode","obs_folder","obs_line","tz","text_size"];
+const text = ["wifi_ssid","stt_url","stt_model","stt_lang","llm_kind","llm_url","llm_model","llm_prompt","obs_url","obs_mode","obs_folder","obs_line","tz","text_size","device_name"];
 const secret = ["wifi_pass","stt_key","llm_key","obs_key"];
 const el = id => document.getElementById(id);
 const say = (id, ok, msg) => { const m = el(id); m.textContent = msg; m.className = "msg " + (ok ? "ok" : "bad"); };

@@ -4,6 +4,7 @@
 // NVS persistence and JSON exchange for the user settings.
 #include "app/settings.h"
 
+#include <cctype>
 #include <mutex>
 
 #include "cJSON.h"
@@ -42,7 +43,8 @@ Values defaults()
     v.obs_mode = "daily";
     v.obs_folder = "Inbox";
     v.obs_line = "- **{time}** {text}";
-    v.text_size = "medium";
+    v.device_name = kProductName;
+    v.text_size = "auto";
     v.tz = "EST5EDT,M3.2.0,M11.1.0";
     return v;
 }
@@ -63,7 +65,36 @@ constexpr StringField kStrings[] = {
     {"obs_key", &Values::obs_key, true},       {"obs_mode", &Values::obs_mode, false},
     {"obs_folder", &Values::obs_folder, false}, {"obs_line", &Values::obs_line, false},
     {"tz", &Values::tz, false},           {"text_size", &Values::text_size, false},
+    {"device_name", &Values::device_name, false},
 };
+
+// Trims a device name and falls back to the product name, so the info screen
+// always has a heading and never one too wide for the band.
+std::string clean_name(const std::string &name)
+{
+    constexpr size_t kMaxLength = 32;
+    size_t first = 0;
+    while (first < name.size() && std::isspace(static_cast<unsigned char>(name[first])) != 0) {
+        ++first;
+    }
+    size_t last = name.size();
+    while (last > first && std::isspace(static_cast<unsigned char>(name[last - 1])) != 0) {
+        --last;
+    }
+    if (first == last) {
+        return kProductName;
+    }
+    size_t cut = last - first;
+    if (cut > kMaxLength) {
+        cut = kMaxLength;
+        // The cap counts bytes, so it can land inside a multi-byte character.
+        // Step back off any continuation byte rather than store half a glyph.
+        while (cut > 0 && (static_cast<unsigned char>(name[first + cut]) & 0xC0) == 0x80) {
+            --cut;
+        }
+    }
+    return name.substr(first, cut);
+}
 
 // Reads one NVS string into dest, leaving dest alone when the key is absent.
 void load_string(nvs_handle_t handle, const char *key, std::string &dest)
@@ -112,11 +143,13 @@ esp_err_t init()
     } else if (err != ESP_ERR_NVS_NOT_FOUND) {
         return err;
     }
+    loaded.device_name = clean_name(loaded.device_name);
     // A size another firmware wrote has no face here, so it falls back rather
-    // than leaving screen.cpp note_face() to guess.
-    if (loaded.text_size != "small" && loaded.text_size != "medium" &&
-        loaded.text_size != "large" && loaded.text_size != "xlarge") {
-        loaded.text_size = "medium";
+    // than leaving screen.cpp layout_note() to guess.
+    if (loaded.text_size != "auto" && loaded.text_size != "small" &&
+        loaded.text_size != "medium" && loaded.text_size != "large" &&
+        loaded.text_size != "xlarge") {
+        loaded.text_size = "auto";
     }
     std::lock_guard<std::mutex> lock(s_mutex);
     s_values = loaded;
@@ -230,13 +263,14 @@ bool apply_json(const char *json, std::string &error)
     }
     cJSON_Delete(root);
 
+    v.device_name = clean_name(v.device_name);
     if (v.obs_mode != "daily" && v.obs_mode != "note") {
         error = "obs_mode must be daily or note";
         return false;
     }
-    if (v.text_size != "small" && v.text_size != "medium" && v.text_size != "large" &&
-        v.text_size != "xlarge") {
-        error = "text_size must be small, medium, large or xlarge";
+    if (v.text_size != "auto" && v.text_size != "small" && v.text_size != "medium" &&
+        v.text_size != "large" && v.text_size != "xlarge") {
+        error = "text_size must be auto, small, medium, large or xlarge";
         return false;
     }
     if (v.llm_kind != "anthropic" && v.llm_kind != "openai") {

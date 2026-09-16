@@ -33,7 +33,7 @@ environments. Do not edit `sdkconfig`; change `sdkconfig.defaults`, delete
 | `main/pin_config.h` | Every GPIO number and I2C address on the board. |
 | `main/app/` | `settings` (NVS + JSON), `input` (button events to a queue), `power` (idle timer, deep sleep), `pipeline` (the state machine and the only place stages are sequenced). |
 | `main/audio/` | `pdm_mic` (I2S PDM RX, mic power) and `clip` (the single PSRAM sample buffer and its WAV header). |
-| `main/board/` | `board` (power latch, shared buses, safe pin states), `battery` (BQ27220), `buzzer` (LEDC). |
+| `main/board/` | `board` (power latch, shared buses, safe pin states), `battery` (BQ27220), `buzzer` (LEDC), `touch` (GT911 swipes, powered only while a note scrolls). |
 | `main/net/` | `wifi` (STA, SoftAP, SNTP), `http` (esp_http_client wrapper and the streamed multipart WAV upload), `stt_client`, `llm_client`, `obsidian_client`. |
 | `main/portal/` | `portal` (esp_http_server routes) and the embedded `index.html` settings page. |
 | `main/ui/` | `canvas` (1-bit 800x480 framebuffer), `display` (SSD1677 bring-up, rotation, refresh policy), `screen` (layout), `text` (UTF-8 decode, wrap, ASCII folding), `font` and `fonts/` (baked ASCII bitmaps), `cjk_font` (draw-time TrueType from the `font` flash partition, for everything above U+007F). |

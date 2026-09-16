@@ -7,6 +7,7 @@
 #include "app/pipeline.h"
 
 #include <atomic>
+#include <cctype>
 #include <cstdio>
 #include <ctime>
 #include <string>
@@ -20,6 +21,7 @@
 #include "board/battery.h"
 #include "board/board.h"
 #include "board/buzzer.h"
+#include "board/touch.h"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
@@ -128,6 +130,20 @@ void capture_task(void *)
     vTaskDelete(nullptr);
 }
 
+// Reports whether a transcript holds anything a person actually said. A silent
+// clip comes back empty or as a stray full stop, and handing that to the
+// cleanup model makes it answer as an assistant rather than clean anything.
+bool has_speech(const std::string &text)
+{
+    for (unsigned char c : text) {
+        // Anything non-ASCII is a byte of a CJK glyph, which is speech.
+        if (c >= 0x80 || std::isalnum(c) != 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // Shows a stage failure and remembers where to resume on Down.
 void fail(Stage stage, const char *title, const std::string &reason)
 {
@@ -147,6 +163,7 @@ void wake_radio()
     const settings::Values s = settings::get();
     s_radio_off = false;
     screen::set_radio_off(false);
+    wifi::set_hostname(s.device_name);
     wifi::connect_async(s.wifi_ssid, s.wifi_pass);
     ESP_LOGI(kTag, "Wi-Fi back on, rejoining %s", s.wifi_ssid.c_str());
 }
@@ -178,6 +195,15 @@ void process(Stage from)
         if (!stt.ok) {
             wifi::set_low_latency(false);
             fail(Stage::Transcribe, "Transcribe failed", stt.error);
+            return;
+        }
+        if (!has_speech(stt.text)) {
+            wifi::set_low_latency(false);
+            s_retry_stage = Stage::None;
+            screen::set_caption("");
+            screen::show("No speech detected", -1, true);
+            buzzer::cue_error();
+            ESP_LOGI(kTag, "Empty transcript, nothing saved");
             return;
         }
         s_pending_text = stt.text;
@@ -295,7 +321,7 @@ void show_info()
         lines.insert(lines.begin() + 1,
                      "IP address: " + wifi::ip() + " (visit address for settings)");
     }
-    screen::show_message("Obsidian Sticky", lines);
+    screen::show_message(s.device_name, lines);
     s_info_showing = true;
 }
 
@@ -312,6 +338,14 @@ void enter_setup()
         "2. Open http://192.168.4.1 in a browser.",
         "3. Enter Wi-Fi, speech, and Obsidian settings, then press Save and restart.",
     });
+}
+
+// Powers the touch panel only while a swipe would do something: a note that
+// overflows the screen, showing on the screen that scrolls. Called once per
+// pass of the event loop, so it converges after anything that redraws.
+void sync_touch()
+{
+    touch::set_enabled(!s_setup_mode && !s_info_showing && screen::scrollable());
 }
 
 // Renders the sleep screen and enters deep sleep.
@@ -337,6 +371,9 @@ void run(void *)
         enter_setup();
     } else {
         const settings::Values s = settings::get();
+        // Before the association, because the hostname travels with the DHCP
+        // request and a later change waits for the next lease.
+        wifi::set_hostname(s.device_name);
         wifi::connect_async(s.wifi_ssid, s.wifi_pass);
         wifi::start_sntp(s.tz);
         portal::start(false);
@@ -344,6 +381,19 @@ void run(void *)
             record_and_process();
         } else {
             screen::show("Ready", -1, true);
+        }
+    }
+
+    // Holding the side button is how the device is switched on, so it is still
+    // down when the button component takes its first scan and queues a press
+    // nobody meant. Waking from deep sleep is the deliberate exception: there
+    // the hold is the recording, and record_and_process has drained it already.
+    if (!wake_recording) {
+        while (input::ai_pressed()) {
+            vTaskDelay(pdMS_TO_TICKS(20));
+        }
+        input::Event stale = input::Event::None;
+        while (input::wait(stale, 0)) {
         }
     }
 
@@ -357,6 +407,7 @@ void run(void *)
     uint32_t seconds_since_poll = 0;
 
     while (true) {
+        sync_touch();
         input::Event event = input::Event::None;
         if (!input::wait(event, pdMS_TO_TICKS(1000))) {
             const settings::Values s = settings::get();
@@ -414,15 +465,22 @@ void run(void *)
                 record_and_process();
             }
             break;
-        // Up and Down page through a long note; at the top Up opens the info
-        // screen, and after a failure Down retries instead of paging.
+        // HOTFIX: Up and Down still scroll, which the touch panel was meant to
+        // take over. Remove both scroll calls here once a device is seen
+        // reporting a touch: every unit tested so far has a GT911 with no
+        // configuration loaded, and a swipe-only build cannot scroll at all on
+        // one. See docs/hardware.md, "The GT911 reports no configuration".
         case input::Event::UpClick:
             if (!s_setup_mode && !screen::scroll(-1)) {
                 show_info();
             }
             break;
         case input::Event::UpHeld:
-            screen::show_message("Powering off", {"Press the side button to turn back on."});
+            // Two screens: the first is a cheap partial that acknowledges the
+            // hold, the second is the image the panel keeps once the rail is
+            // gone, so it describes the finished state rather than the act.
+            screen::show("Powering off");
+            screen::show_message("Powered off", {"Hold the side (AI) button to turn back on."});
             display::sleep();
             board::power_off();
             break;
@@ -441,6 +499,14 @@ void run(void *)
                 esp_restart();
             }
             enter_setup();
+            break;
+        // The finger carries the text with it, so a swipe up shows what was
+        // below the last visible line.
+        case input::Event::SwipeUp:
+            screen::scroll(1);
+            break;
+        case input::Event::SwipeDown:
+            screen::scroll(-1);
             break;
         case input::Event::AiUp:
         case input::Event::None:

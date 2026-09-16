@@ -64,6 +64,9 @@ bool idle_expired(int idle_minutes)
     hold_output(PIN_EPD_EN, 0);
     hold_output(PIN_TOUCH_EN, 0);
     hold_output(PIN_TOUCH_RST, 0);
+    // board/touch.cpp may have left this as the controller's interrupt input,
+    // and a floating input on a pin whose chip has just lost power leaks.
+    hold_output(PIN_TOUCH_INT, 0);
     hold_output(PIN_MIC_EN, 0);
     hold_output(PIN_SD_EN, 0);
     hold_output(PIN_BUZZER, 0);

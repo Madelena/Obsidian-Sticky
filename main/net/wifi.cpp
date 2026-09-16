@@ -4,11 +4,13 @@
 // ESP-IDF Wi-Fi station, SoftAP, and SNTP wiring.
 #include "net/wifi.h"
 
+#include <cctype>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
 
+#include "app/settings.h"
 #include "esp_check.h"
 #include "esp_event.h"
 #include "esp_log.h"
@@ -69,6 +71,29 @@ void on_event(void *, esp_event_base_t base, int32_t id, void *data)
     }
 }
 
+// Reduces a name to the letters, digits and single hyphens a DHCP hostname may
+// carry. Every byte of a non-Latin name drops out, which is why set_hostname
+// needs a fallback behind this.
+std::string filter_hostname(const std::string &name)
+{
+    constexpr size_t kMaxHostname = 32;
+    std::string out;
+    for (unsigned char c : name) {
+        if (std::isalnum(c) != 0) {
+            out.push_back(static_cast<char>(c));
+        } else if (!out.empty() && out.back() != '-') {
+            out.push_back('-');
+        }
+    }
+    if (out.size() > kMaxHostname) {
+        out.resize(kMaxHostname);
+    }
+    while (!out.empty() && out.back() == '-') {
+        out.pop_back();
+    }
+    return out;
+}
+
 // Formats a netif's IPv4 address, or an empty string.
 std::string netif_ip(esp_netif_t *netif)
 {
@@ -106,6 +131,25 @@ esp_err_t init()
                         kTag, "ip events");
     ESP_RETURN_ON_ERROR(esp_wifi_set_storage(WIFI_STORAGE_RAM), kTag, "storage");
     return ESP_OK;
+}
+
+
+esp_err_t set_hostname(const std::string &name)
+{
+    std::string host = filter_hostname(name);
+    if (host.empty()) {
+        // A name written entirely in Chinese leaves nothing a router can show.
+        host = filter_hostname(settings::kProductName);
+    }
+    if (s_ap_netif != nullptr) {
+        esp_netif_set_hostname(s_ap_netif, host.c_str());
+    }
+    if (s_sta_netif == nullptr) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    const esp_err_t err = esp_netif_set_hostname(s_sta_netif, host.c_str());
+    ESP_LOGI(kTag, "Hostname %s (%s)", host.c_str(), esp_err_to_name(err));
+    return err;
 }
 
 

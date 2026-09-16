@@ -12,6 +12,10 @@
 | `main/ui/fonts/*.h` | Bitmaps generated from the fonts above by `tools/gen_font.py` | OFL 1.1 |
 | `build/font_cjk.ttf` | Noto Sans TC, subset from [google/fonts](https://github.com/google/fonts/tree/main/ofl/notosanstc) by `tools/fetch_cjk_font.py`, downloaded on demand and never committed | SIL Open Font License 1.1 (`build/NotoSansTC-OFL.txt`, fetched alongside it) |
 
+`main/board/touch.cpp` is written from scratch, but its GT911 register
+addresses and reset timings are taken from the `gt911` component in the same
+MIT-licensed Sticky 2048 source as the drivers above.
+
 Design references that were read but not copied: Seeed's official
 `Sticky_dashboard_demo` (no license file) and the GPL-3.0
 [Followup Sticky](https://github.com/alxv2016/folloup-sticky) firmware.

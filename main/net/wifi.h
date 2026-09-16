@@ -17,6 +17,15 @@ namespace wifi {
 // Creates netifs, the event loop, and the driver, radio still off.
 esp_err_t init();
 
+// HOSTNAME SETTER
+// Derives a DHCP hostname from the device name and applies it to both
+// interfaces, so the router lists the device by the name on its own screen.
+// Letters and digits survive and every run of anything else becomes one
+// hyphen, so a name with no Latin characters in it falls back to the product
+// name. Call it before connect_async: a hostname only reaches the router with
+// the next DHCP lease.
+esp_err_t set_hostname(const std::string &name);
+
 // STATION CONNECTOR
 // Starts connecting to the stored network in the background and keeps
 // retrying on disconnect until stop() is called.

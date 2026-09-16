@@ -89,6 +89,14 @@ bool wait(Event &event, TickType_t timeout)
 }
 
 
+void post(Event event)
+{
+    if (s_queue != nullptr) {
+        xQueueSend(s_queue, &event, 0);
+    }
+}
+
+
 bool ai_pressed()
 {
     return s_ai != nullptr && iot_button_get_key_level(s_ai) == 1;

@@ -36,7 +36,8 @@
 #define SHT40_I2C_ADDR      0x44
 #define LSM6DS3_I2C_ADDR    0x6A
 
-// I2C0 touch controller (GT911), unused by this firmware but kept powered off
+// I2C0 touch controller (GT911), powered up by board/touch.cpp only while a
+// note is long enough to scroll
 #define PIN_TOUCH_SCL       2
 #define PIN_TOUCH_SDA       3
 #define PIN_TOUCH_EN        42

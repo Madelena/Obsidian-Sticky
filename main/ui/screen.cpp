@@ -1,9 +1,9 @@
 // =============================================================================
 // SCREEN
 // =============================================================================
-// Layout of the status band, optional caption, and paged note body on the
+// Layout of the status band, optional caption, and scrolling note body on the
 // 800x480 canvas. The note face comes from the text_size setting in
-// settings.cpp.
+// settings.cpp, which may ask for the largest face that shows the note whole.
 #include "ui/screen.h"
 
 #include <cstdio>
@@ -30,6 +30,11 @@ constexpr int kBlockGap = 6;
 constexpr int kBodyTop = kStatusHeight + 12;
 constexpr int kBodyBottom = canvas::kHeight - 12;
 constexpr int kMeterWidth = 220;
+// The scroll bar sits inside the right margin rather than taking a column of
+// its own, so the text width does not depend on whether the note overflows.
+constexpr int kScrollGap = 12;
+constexpr int kScrollWidth = 8;
+constexpr int kScrollThumbMin = 28;
 
 // The pipeline task and the portal's HTTP task both draw here: the portal
 // redraws on a settings save and on POST /api/show. The canvas is one shared
@@ -40,14 +45,21 @@ std::mutex s_mutex;
 std::string s_note;
 std::string s_caption;
 std::string s_status;
-int s_page = 0;
-int s_pages = 1;
+int s_first_line = 0;    // Topmost wrapped line on screen
+int s_total_lines = 0;
+int s_visible_lines = 1;
 bool s_radio_off = false;
 
-// Picks the note face from the user's size setting.
-const Font &note_face()
+// One face and the note wrapped to it, as chosen for the space available.
+struct Layout {
+    const Font *face = nullptr;
+    std::vector<std::string> lines;
+    int visible = 1;
+};
+
+// Picks the note face from a fixed size setting.
+const Font &fixed_face(const std::string &size)
 {
-    const std::string size = settings::get().text_size;
     if (size == "small") {
         return font::body();
     }
@@ -59,6 +71,40 @@ const Font &note_face()
     }
     // "medium" and anything unrecognized share the 40 px default face.
     return font::large();
+}
+
+// Counts the lines of a face that fit between top and the bottom margin.
+int fitting_lines(const Font &face, int top)
+{
+    // Pitch is the distance to the next line, so only the lines before the
+    // last one need it; charging the last its glyph box instead is what fits a
+    // fifth 52 px line into the same band.
+    const int fits = (kBodyBottom - top - face.height) / face.line_height + 1;
+    return fits < 1 ? 1 : fits;
+}
+
+// Wraps the note at the size the user chose, or at the largest of the four
+// faces that shows the whole note at once when the size is "auto".
+Layout layout_note(int top)
+{
+    const std::string prepared = text::prepare(s_note);
+    const int width = canvas::kWidth - 2 * kMargin;
+    const std::string size = settings::get().text_size;
+    if (size != "auto") {
+        const Font &face = fixed_face(size);
+        return {&face, text::wrap(face, prepared, width), fitting_lines(face, top)};
+    }
+    // Largest first, so the first face whose whole note fits wins. Falling out
+    // of the loop leaves the smallest face, and that note scrolls.
+    const Font *const faces[] = {&font::xxlarge(), &font::xlarge(), &font::large(), &font::body()};
+    Layout layout;
+    for (const Font *face : faces) {
+        layout = {face, text::wrap(*face, prepared, width), fitting_lines(*face, top)};
+        if (static_cast<int>(layout.lines.size()) <= layout.visible) {
+            break;
+        }
+    }
+    return layout;
 }
 
 // Gives the note body its top edge, pushed down when a caption is showing.
@@ -95,11 +141,7 @@ void draw_status(const std::string &status, int level)
     std::snprintf(right, sizeof(right), "%s   %s%s", link,
                   percent >= 0 ? (std::to_string(percent) + "%").c_str() : "--",
                   battery::charging() ? " CHG" : (battery::on_usb() ? " USB" : ""));
-    std::string line = right;
-    if (s_pages > 1) {
-        line = std::to_string(s_page + 1) + "/" + std::to_string(s_pages) + "   " + line;
-    }
-    canvas::draw_text_right(font::small(), canvas::kWidth - kMargin, 26, line.c_str());
+    canvas::draw_text_right(font::small(), canvas::kWidth - kMargin, 26, right);
 }
 
 
@@ -113,34 +155,50 @@ void draw_caption()
 }
 
 
-// Draws the current page of the note and records how many pages exist.
+// Returns the largest first-line index that still fills the body.
+int max_first_line()
+{
+    return s_total_lines > s_visible_lines ? s_total_lines - s_visible_lines : 0;
+}
+
+
+// Draws the position marker in the right margin. It is the only cue that
+// there is more note below, so it is drawn whenever one exists.
+void draw_scroll_bar(int top)
+{
+    const int furthest = max_first_line();
+    if (furthest == 0) {
+        return;
+    }
+    const int x = canvas::kWidth - kMargin + kScrollGap;
+    const int height = kBodyBottom - top;
+    int thumb = height * s_visible_lines / s_total_lines;
+    if (thumb < kScrollThumbMin) {
+        thumb = kScrollThumbMin;
+    }
+    canvas::fill_rect(x, top, kScrollWidth, height, true);
+    canvas::fill_rect(x + 1, top + 1, kScrollWidth - 2, height - 2, false);
+    canvas::fill_rect(x, top + (height - thumb) * s_first_line / furthest, kScrollWidth, thumb, true);
+}
+
+
+// Draws the visible lines of the note and records what scroll() may move.
 void draw_note()
 {
-    const Font &face = note_face();
-    const int width = canvas::kWidth - 2 * kMargin;
-    const std::vector<std::string> lines = text::wrap(face, text::prepare(s_note), width);
-    const int pitch = face.line_height;
     const int top = body_top();
-    // Pitch is the distance to the next line, so only the lines before the
-    // last one need it; charging the last its glyph box instead is what fits a
-    // fifth 52 px line into the same band.
-    int per_page = (kBodyBottom - top - face.height) / pitch + 1;
-    if (per_page < 1) {
-        per_page = 1;
-    }
-    s_pages = (static_cast<int>(lines.size()) + per_page - 1) / per_page;
-    if (s_pages < 1) {
-        s_pages = 1;
-    }
-    if (s_page >= s_pages) {
-        s_page = s_pages - 1;
+    const Layout layout = layout_note(top);
+    s_total_lines = static_cast<int>(layout.lines.size());
+    s_visible_lines = layout.visible;
+    // A caption appearing, or a larger face, can strand the view past the end.
+    if (s_first_line > max_first_line()) {
+        s_first_line = max_first_line();
     }
     int y = top;
-    const int first = s_page * per_page;
-    for (int i = first; i < first + per_page && i < static_cast<int>(lines.size()); ++i) {
-        canvas::draw_text(face, kMargin, y, lines[i].c_str());
-        y += pitch;
+    for (int i = s_first_line; i < s_first_line + s_visible_lines && i < s_total_lines; ++i) {
+        canvas::draw_text(*layout.face, kMargin, y, layout.lines[i].c_str());
+        y += layout.face->line_height;
     }
+    draw_scroll_bar(top);
 }
 
 
@@ -150,7 +208,6 @@ void draw_all(int level)
     canvas::clear();
     draw_caption();
     draw_note();
-    // Last, because draw_note is what counts the pages this band reports.
     draw_status(s_status, level);
 }
 
@@ -161,7 +218,7 @@ void set_note(const std::string &note)
 {
     std::lock_guard<std::mutex> lock(s_mutex);
     s_note = note;
-    s_page = 0;
+    s_first_line = 0;
 }
 
 
@@ -195,8 +252,6 @@ void show(const std::string &status, int level, bool full)
 void refresh()
 {
     std::lock_guard<std::mutex> lock(s_mutex);
-    // draw_all reflows the note first, so draw_note clamps s_page to the page
-    // count the new face gives before the status band reports it.
     draw_all(-1);
     display::refresh_full();
 }
@@ -210,14 +265,30 @@ void redraw()
 }
 
 
+bool scrollable()
+{
+    std::lock_guard<std::mutex> lock(s_mutex);
+    return max_first_line() > 0;
+}
+
+
 bool scroll(int delta)
 {
     std::lock_guard<std::mutex> lock(s_mutex);
-    const int target = s_page + delta;
-    if (target < 0 || target >= s_pages) {
+    // One line of overlap carries the eye from screen to screen, the way a
+    // page-down key does; a clean break loses the reader's place.
+    const int step = s_visible_lines > 1 ? s_visible_lines - 1 : 1;
+    int target = s_first_line + delta * step;
+    if (target < 0) {
+        target = 0;
+    }
+    if (target > max_first_line()) {
+        target = max_first_line();
+    }
+    if (target == s_first_line) {
         return false;
     }
-    s_page = target;
+    s_first_line = target;
     draw_all(-1);
     display::refresh_partial();
     return true;
@@ -231,8 +302,9 @@ void show_message(const std::string &title, const std::vector<std::string> &line
     canvas::draw_text(font::title(), kMargin, 18, text::prepare(title).c_str());
     canvas::fill_rect(kMargin, kStatusHeight - 2, canvas::kWidth - 2 * kMargin, 2);
 
-    // The only place the firmware version is shown. The address belongs to
-    // whichever caller wants it, so it is not repeated here.
+    // The only place the firmware version is shown, and it names the product
+    // rather than the device, so a renamed Sticky still says what it runs. The
+    // address belongs to whichever caller wants it, so it is not repeated.
     const int stamp_top = kBodyBottom - font::small().height;
     int y = kBodyTop;
     const int width = canvas::kWidth - 2 * kMargin;
@@ -245,7 +317,8 @@ void show_message(const std::string &title, const std::vector<std::string> &line
             y += font::body().line_height;
         }
     }
-    const std::string stamp = std::string("v") + esp_app_get_description()->version;
+    const std::string stamp =
+        std::string(settings::kProductName) + " v" + esp_app_get_description()->version;
     canvas::draw_text(font::small(), kMargin, stamp_top, stamp.c_str());
     display::refresh_full();
 }

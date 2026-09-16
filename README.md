@@ -31,16 +31,27 @@ device works as a sticky note on your desk until you pick it up again.
 | --- | --- |
 | Hold the side (AI) button | Starts recording. The screen shows a level meter and the elapsed time. |
 | Release the side button | Stops recording and runs transcribe, optional cleanup, and save. |
-| Press Up | Pages back through a long note. At the top of the note it shows the info screen instead: Wi-Fi network, IP address, battery, where notes are being saved, and the firmware version. It stays up until you press a button, which returns you to the note. |
-| Press Down | Pages forward through a long note. After a failure it retries the failed stage instead: a failed transcribe retries from the audio, which is still in memory, and a failed save retries from the text, so nothing has to be spoken again. |
+| Press Up | Scrolls back through a note too long to fit. At the top it shows the info screen instead: Wi-Fi network, IP address, battery, where notes are being saved, and the firmware version. It stays up until you press a button, which returns you to the note. |
+| Press Down | Scrolls on through a long note. After a failure it retries the failed stage instead: a failed transcribe retries from the audio, which is still in memory, and a failed save retries from the text, so nothing has to be spoken again. |
+| Swipe up or down on the screen | Also scrolls a long note, on a device whose touch controller reports touches. See the note below. |
 | Hold Down for 3 seconds | Enters setup mode. The device stops its normal work, starts the "Sticky-Setup" Wi-Fi network, and shows the setup instructions. Holding Down again in setup mode restarts the device. |
-| Hold Up for 3 seconds | Powers off. Press the side button to turn it back on. The side button cannot do this, because holding it is how you record. |
+| Hold Up for 3 seconds | Powers off, leaving a "Powered off" page on the screen. Hold the side button to turn it back on. The side button cannot power off, because holding it is how you record. |
 
 Recordings shorter than about a third of a second are discarded, and a single
-recording stops at 90 seconds. The status band tracks the work, and the note
-itself is drawn once, when it is safely in your vault, because every redraw
-of this screen costs a second or two. Notes longer than the screen are
-paged, with the page count in the status band.
+recording stops at 90 seconds. Holding the button without speaking ends at
+"No speech detected" and leaves the previous note alone, so nothing is saved.
+Switching the device on does not start a recording, even though you switch it
+on by holding the same button; press it again once the screen says Ready.
+
+The status band tracks the work, and the note itself is drawn once, when it is
+safely in your vault, because every redraw of this screen costs a second or
+two. A note longer than the screen scrolls a screenful at a time, and the bar
+in the right margin shows where you are.
+
+Swipe scrolling is built but unproven. On every unit tested, the GT911 touch
+controller comes up with no configuration loaded and never reports a touch,
+so the buttons remain the way to scroll. `docs/hardware.md` records exactly
+what was measured and what was ruled out.
 
 After ten idle minutes the device goes into deep sleep and the screen keeps
 showing the last note. Press the side button to wake it. If you keep the
@@ -164,7 +175,8 @@ curl -X POST http://<device-ip>/api/show --data-binary "Hello 你好"
 | `obs_mode` | `daily` | `daily` appends a line to today's daily note. `note` creates a new file. |
 | `obs_folder` | `Inbox` | Vault folder for new notes. Used only in `note` mode. Empty puts notes at the vault root. |
 | `obs_line` | `- **{time}** {text}` | Template for the daily-note line. `{time}` becomes `HH:MM` and `{text}` becomes the transcript with newlines flattened to spaces. Used only in `daily` mode. |
-| `text_size` | `medium` | Note text size on the screen: `small` (30 px, about 9 lines per page), `medium` (40 px, about 7), `large` (52 px, about 5), or `xlarge` (64 px, about 4). |
+| `device_name` | `Obsidian Sticky` | The heading on the device's info screen and the hostname it gives your router, so a household with more than one can tell them apart. Trimmed, capped at 32 bytes on a character boundary, and a blank field goes back to the default. The footer keeps saying `Obsidian Sticky` and the firmware version whatever you rename it to. The hostname keeps letters and digits and turns every other run of characters into a single hyphen, so "Fridge Note" becomes `Fridge-Note`; a name with no Latin characters falls back to `Obsidian-Sticky`. Your router sees the new name at the next DHCP lease, so restart the device after renaming it. |
+| `text_size` | `auto` | Note text size on the screen. `auto` picks the largest size that shows the whole note at once. The fixed sizes are `small` (30 px, about 9 lines), `medium` (40 px, about 7), `large` (52 px, about 5) and `xlarge` (64 px, about 4). |
 | `tz` | `EST5EDT,M3.2.0,M11.1.0` | POSIX TZ string, used for the clock, the daily-note timestamp, and new-note filenames. |
 | `sleep_min` | `10` | Idle minutes before deep sleep. 0 disables sleep. |
 | `wifi_idle_min` | `0` | Idle minutes before the Wi-Fi radio is stopped to save power, trading a few seconds of reconnect on the next note for a longer time between charges. 0 keeps it on. The status band reads "Wi-Fi off" and any button restarts it, but the settings page is unreachable until it does. Never fires when `sleep_min` is smaller and non-zero, because deep sleep comes first. |
