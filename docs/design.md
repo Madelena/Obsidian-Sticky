@@ -59,12 +59,12 @@ Four, selectable as `text_size` on the settings page.
 | xlarge | `font::xxlarge()` | 64 px | 4 |
 
 Madelena revised the scale twice while using the device, and the second
-revision is
-why the first two columns do not line up. A 22 px face was originally the
-smallest choice and was dropped as "impractically small" for a device read at
-arm's length on a fridge or a desk. Every label then shifted down one step,
-so what had been Medium became Small, while the internal face names stayed
-where they were. The face named `large` is the setting named `medium`.
+revision is why the first two columns do not line up. A 22 px face was
+originally the smallest choice and was dropped as "impractically small" for a
+device read at arm's length on a fridge or a desk. Every label then shifted
+down one step, so what had been Medium became Small, while the internal face
+names stayed where they were. The face named `large` is the setting named
+`medium`.
 `note_face()` in `main/ui/screen.cpp` is the whole mapping. Do not rename
 either side to make them agree: the setting strings are stored in NVS and the
 face names are in the generated headers.
