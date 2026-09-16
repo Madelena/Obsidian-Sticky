@@ -80,6 +80,26 @@ function whose first line is an ALL CAPS agent-noun title resembling the
 function name, inline comments only where a reader would squint, and no
 em-dashes anywhere.
 
+Which of the two files a comment goes in follows the global rule
+"caller-facts up, editor-facts inline", because a `.h` and a `.cpp` are that
+same split made physical. The header declares the contract and is the only
+file most callers read; the source defines the mechanism and is read by
+whoever edits it.
+
+- The function header goes in the `.h`, above the declaration. Putting it in
+  the `.cpp` hides the contract from everyone who needs it. See
+  `main/audio/pdm_mic.h`.
+- The `.cpp` gets the file banner and inline comments, and its definitions are
+  left bare. Why this mechanism and not the obvious one belongs at the line it
+  concerns, as in the USB pad note in `main/audio/pdm_mic.cpp`.
+- A function in an anonymous namespace is declared nowhere, so it has no
+  header to live in. Give it a one-line comment above the definition with no
+  ALL CAPS title, the same treatment a nested helper gets, however long the
+  body is. See `main/app/pipeline.cpp`.
+- Changing what a function does means editing the header in the other file, in
+  the same edit and never as a follow-up. This is the one real cost of keeping
+  contracts in the `.h`, and a stale contract there misleads every caller.
+
 ## Reference
 
 | Document | Read it when |

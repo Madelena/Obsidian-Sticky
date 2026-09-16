@@ -7,7 +7,7 @@ decisions is in `docs/architecture.md`; this file is the intent.
 
 ## The governing principle
 
-Single purpose. In the owner's words: "I definitely want this to be a
+Single purpose. In Madelena's words: "I definitely want this to be a
 single-purpose device that I can simply pick up, speak, and remember."
 
 There are no pages, no menus, and no touch interface. The GT911 touch
@@ -58,7 +58,8 @@ Four, selectable as `text_size` on the settings page.
 | large | `font::xlarge()` | 52 px | 5 |
 | xlarge | `font::xxlarge()` | 64 px | 4 |
 
-The scale was revised twice by the owner in use, and the second revision is
+Madelena revised the scale twice while using the device, and the second
+revision is
 why the first two columns do not line up. A 22 px face was originally the
 smallest choice and was dropped as "impractically small" for a device read at
 arm's length on a fridge or a desk. Every label then shifted down one step,
@@ -88,7 +89,7 @@ to ASCII approximations rather than failing.
 
 ## Feedback, which is the heart of the interaction
 
-The owner's requirement, verbatim: the user "should see results as soon as
+Madelena's requirement, verbatim: the user "should see results as soon as
 possible" and "should get some sort of feedback loop so they know their
 action is working as intended."
 
