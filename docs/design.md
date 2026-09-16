@@ -337,6 +337,13 @@ regular below it, and a step that size separates the two without a line. The
 version stamp at the foot takes the same 18 px bottom margin as the status bar
 on the note page, being the same thing: one line of chrome on the floor.
 
+Keep the paragraphs in their order. The page truncates at the bottom to
+protect the stamp, and only one value can realistically wrap, the folder in
+Saving to, which costs the last paragraph. That is the settings address,
+whose IP is in the table two lines above it, so the page loses the line it
+can most afford. Putting either Hold instruction last would lose a recovery
+step instead.
+
 Its heading is the `device_name` setting, which is also the hostname the
 device gives the router, so a household with two of these can tell them apart
 on the shelf and in the client list. On a router that registers DHCP names in
