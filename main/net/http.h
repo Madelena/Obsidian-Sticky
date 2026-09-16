@@ -38,6 +38,32 @@ struct Response {
 Response request(const char *method, const std::string &url, const std::vector<Header> &headers,
                  const std::string &body, bool insecure_tls = false, int timeout_ms = 20000);
 
+struct WarmTarget {
+    std::string url;
+    bool insecure_tls = false;
+};
+
+// PRIVATE HOST CHECKER
+// Returns true for a LAN or link-local host, which is where a self-signed
+// certificate is expected; public hosts are verified against the bundle.
+bool is_private_host(const std::string &url);
+
+// CONNECTION WARMER
+// Opens connections to the given hosts in the background and holds them, so a
+// later request to one of those hosts skips DNS, TCP and the TLS handshake.
+// That handshake measures about 1.8 seconds on this chip, so warming is
+// started while the user is still speaking rather than after they stop.
+void warm_async(const std::vector<WarmTarget> &targets);
+
+// WARMER WAITER
+// Blocks until background warming has finished or timeout_ms passes, so a
+// request never races the handshake it is trying to skip.
+void wait_warm(uint32_t timeout_ms);
+
+// WARM CONNECTION DROPPER
+// Closes and forgets every held connection. Safe when none is held.
+void drop_warm();
+
 // WAV UPLOADER
 // Posts a multipart form whose last part is the current recording from
 // clip.cpp as a WAV file named note.wav; fields become plain text parts.

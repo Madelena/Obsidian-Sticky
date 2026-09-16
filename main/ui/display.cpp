@@ -12,6 +12,7 @@
 #include "esp_check.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "pin_config.h"
@@ -52,10 +53,17 @@ esp_err_t push(seeed_epaper_refresh_mode_t mode)
     if (s_panel == nullptr || s_rotated == nullptr || canvas::data() == nullptr) {
         return ESP_ERR_INVALID_STATE;
     }
+    const int64_t started = esp_timer_get_time();
     rotate_canvas();
     const seeed_epaper_area_t full = {0, 0, canvas::kWidth, canvas::kHeight};
-    return seeed_epaper_panel_refresh_area(s_panel, &full, s_rotated, canvas::kStride,
-                                           SEEED_EPAPER_PIXEL_FORMAT_MONO1_MSB, mode);
+    const esp_err_t err = seeed_epaper_panel_refresh_area(
+        s_panel, &full, s_rotated, canvas::kStride, SEEED_EPAPER_PIXEL_FORMAT_MONO1_MSB, mode);
+    // This blocks the calling task for the whole waveform, so it is on the
+    // critical path of a note. Worth knowing against the network timings.
+    ESP_LOGI(kTag, "%s refresh took %u ms",
+             mode == SEEED_EPAPER_REFRESH_FULL ? "full" : "partial",
+             static_cast<unsigned>((esp_timer_get_time() - started) / 1000));
+    return err;
 }
 
 }  // namespace

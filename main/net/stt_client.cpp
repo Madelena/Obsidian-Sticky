@@ -4,7 +4,6 @@
 // Multipart WAV upload to an OpenAI-shaped /audio/transcriptions endpoint.
 #include "net/stt_client.h"
 
-#include <cstring>
 
 #include "app/settings.h"
 #include "audio/clip.h"
@@ -15,25 +14,6 @@ namespace stt_client {
 namespace {
 
 constexpr const char *kTag = "stt";
-
-// Private LAN hosts use self-signed certificates, public APIs are verified
-// against the bundle.
-bool is_private_host(const std::string &url)
-{
-    const size_t scheme = url.find("://");
-    const size_t start = scheme == std::string::npos ? 0 : scheme + 3;
-    const size_t end = url.find_first_of(":/", start);
-    const std::string host = url.substr(start, end == std::string::npos ? end : end - start);
-    if (host == "localhost" || host.rfind("192.168.", 0) == 0 || host.rfind("10.", 0) == 0 ||
-        host.rfind("172.", 0) == 0) {
-        return true;
-    }
-    const auto ends_with = [&host](const char *suffix) {
-        const size_t n = std::strlen(suffix);
-        return host.size() >= n && host.compare(host.size() - n, n, suffix) == 0;
-    };
-    return ends_with(".local") || ends_with(".lan");
-}
 
 // Trims whitespace from both ends.
 std::string trim(std::string text)
@@ -74,7 +54,7 @@ Result transcribe()
         {"Authorization", "Bearer " + s.stt_key},
     };
     const http::Response response =
-        http::post_wav(s.stt_url, headers, fields, is_private_host(s.stt_url));
+        http::post_wav(s.stt_url, headers, fields, http::is_private_host(s.stt_url));
     if (!response.ok()) {
         result.error = response.summary();
         return result;
@@ -105,7 +85,7 @@ Result test()
         url = url.substr(0, audio) + "/models";
     }
     const http::Response response = http::request("GET", url, {{"Authorization", "Bearer " + s.stt_key}},
-                                                  "", is_private_host(s.stt_url));
+                                                  "", http::is_private_host(s.stt_url));
     result.ok = response.ok();
     result.text = result.ok ? "Reachable, key accepted" : "";
     result.error = result.ok ? "" : response.summary();

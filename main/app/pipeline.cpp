@@ -24,6 +24,7 @@
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "net/http.h"
 #include "net/llm_client.h"
 #include "net/obsidian_client.h"
 #include "net/stt_client.h"
@@ -154,10 +155,14 @@ void wake_radio()
 void process(Stage from)
 {
     const settings::Values s = settings::get();
+    std::string note_caption;
     // Ahead of the wait_connected below, which would only time out against a
     // stopped radio and fail the note with "No Wi-Fi".
     wake_radio();
     wifi::set_low_latency(true);
+    // Never longer than one handshake: if warming has not finished, the
+    // request below simply pays for its own.
+    http::wait_warm(4000);
 
     if (from == Stage::Transcribe) {
         if (!wifi::connected()) {
@@ -176,21 +181,17 @@ void process(Stage from)
             return;
         }
         s_pending_text = stt.text;
-        // Show the raw transcript right away so the user can see what was heard.
-        screen::set_note(s_pending_text);
-        screen::set_caption("");
-        screen::show(s.llm_on ? "Cleaning up" : "Saving", -1, true);
 
         if (s.llm_on) {
+            // A status line rather than the transcript: drawing text costs a
+            // full refresh of about two seconds, and the cleaned version would
+            // replace it moments later. The note is drawn once, at the end.
+            screen::show("Cleaning up");
             const llm_client::Result llm = llm_client::clean(s_pending_text);
             if (llm.ok) {
                 s_pending_text = llm.text;
-                screen::set_note(s_pending_text);
-                screen::set_caption("");
-                screen::show("Saving", -1, true);
             } else {
-                screen::set_caption("Cleanup failed (" + llm.error + "), saving raw text");
-                screen::show("Saving");
+                note_caption = "Cleanup failed (" + llm.error + "), saved the raw text";
                 ESP_LOGW(kTag, "Cleanup failed: %s", llm.error.c_str());
             }
         }
@@ -206,7 +207,7 @@ void process(Stage from)
 
     s_retry_stage = Stage::None;
     screen::set_note(s_pending_text);
-    screen::set_caption("");
+    screen::set_caption(note_caption);
     screen::show("Saved " + clock_text(), -1, true);
     buzzer::cue_saved();
     store_last_note(s_pending_text);
@@ -229,6 +230,18 @@ void record_and_process()
         return;
     }
     buzzer::cue_start();
+
+    // The TLS handshakes cost about 1.8 seconds each and depend on nothing the
+    // microphone produces, so they run while the user is still speaking.
+    const settings::Values s = settings::get();
+    std::vector<http::WarmTarget> targets;
+    if (!s.stt_url.empty() && !s.stt_key.empty()) {
+        targets.push_back({s.stt_url, http::is_private_host(s.stt_url)});
+    }
+    if (s.llm_on && !s.llm_url.empty() && !s.llm_key.empty()) {
+        targets.push_back({s.llm_url, http::is_private_host(s.llm_url)});
+    }
+    http::warm_async(targets);
 
     // Meter and elapsed time once a second; partial refreshes are slower than
     // that, so the loop never tries to keep up with the audio.
@@ -258,6 +271,7 @@ void record_and_process()
     }
 
     if (clip::duration_ms() < kMinRecordingMs) {
+        http::drop_warm();
         screen::show("Ready");
         return;
     }
