@@ -47,6 +47,16 @@ button held down while it wakes, it starts recording as soon as the
 microphone is up, so a wake-and-speak gesture works as one motion. The idle
 timeout is configurable, and setting it to 0 disables sleep entirely.
 
+A second idle timeout can stop the Wi-Fi radio without sleeping the device,
+which trades a few seconds of reconnect before the first note for a
+noticeably longer time between charges. It is off by default. The status band
+reads "Wi-Fi off" while the radio is stopped, and pressing any button brings
+it back; a recording started in that state reconnects on its own before it
+uploads. The settings page is unreachable in the meantime, so press a button
+on the device first if you want to change something. If the sleep timeout is
+the shorter of the two, the device is already asleep by the time the Wi-Fi
+timeout would fire, and the radio setting never has an effect.
+
 ## What you need
 
 - A speech-to-text endpoint and key. Any OpenAI-compatible
@@ -166,6 +176,7 @@ curl -X POST http://<device-ip>/api/show --data-binary "Hello 你好"
 | `text_size` | `medium` | Note text size on the screen: `small` (30 px, about 8 lines per page), `medium` (40 px, about 6), `large` (52 px, about 5), or `xlarge` (64 px, about 4). |
 | `tz` | `EST5EDT,M3.2.0,M11.1.0` | POSIX TZ string, used for the clock, the daily-note timestamp, and new-note filenames. |
 | `sleep_min` | `10` | Idle minutes before deep sleep. 0 disables sleep. |
+| `wifi_idle_min` | `0` | Idle minutes before the Wi-Fi radio is stopped to save power. 0 keeps it on. Any button restarts it. Has no effect when `sleep_min` is smaller and non-zero, since deep sleep comes first. |
 | `beep` | on | Buzzer cues on record start, record stop, save, and error. |
 
 New notes are named `YYYY-MM-DD HHMM Voice note.md` and carry a small

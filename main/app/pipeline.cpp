@@ -53,6 +53,7 @@ std::string s_pending_text;
 std::atomic<bool> s_capture_stop{false};
 std::atomic<bool> s_capture_done{true};
 bool s_setup_mode = false;
+bool s_radio_off = false;
 
 // Buckets the charge so the panel is repainted on a visible change rather
 // than on every percent, and keeps an unreadable gauge distinct from a flat
@@ -136,10 +137,26 @@ void fail(Stage stage, const char *title, const std::string &reason)
     ESP_LOGW(kTag, "%s: %s", title, reason.c_str());
 }
 
+// Restarts the station after the idle timeout stopped it; otherwise a no-op.
+void wake_radio()
+{
+    if (!s_radio_off) {
+        return;
+    }
+    const settings::Values s = settings::get();
+    s_radio_off = false;
+    screen::set_radio_off(false);
+    wifi::connect_async(s.wifi_ssid, s.wifi_pass);
+    ESP_LOGI(kTag, "Wi-Fi back on, rejoining %s", s.wifi_ssid.c_str());
+}
+
 // Runs transcribe, optional cleanup, and save from the given stage.
 void process(Stage from)
 {
     const settings::Values s = settings::get();
+    // Ahead of the wait_connected below, which would only time out against a
+    // stopped radio and fail the note with "No Wi-Fi".
+    wake_radio();
     wifi::set_low_latency(true);
 
     if (from == Stage::Transcribe) {
@@ -320,6 +337,7 @@ void run(void *)
     // One check owns every idle repaint, so the Wi-Fi indicator and the
     // battery reading cannot each decide to paint the panel on their own.
     bool shown_link = wifi::connected();
+    bool shown_radio_off = s_radio_off;
     int shown_battery = battery_step();
     bool shown_charging = battery::charging();
     bool shown_usb = battery::on_usb();
@@ -328,7 +346,8 @@ void run(void *)
     while (true) {
         input::Event event = input::Event::None;
         if (!input::wait(event, pdMS_TO_TICKS(1000))) {
-            if (!s_setup_mode && power::idle_expired(settings::get().sleep_min)) {
+            const settings::Values s = settings::get();
+            if (!s_setup_mode && power::idle_expired(s.sleep_min)) {
                 go_to_sleep();
             }
             // Setup mode owns the panel with its instructions, and the gauge
@@ -336,13 +355,23 @@ void run(void *)
             if (s_setup_mode) {
                 continue;
             }
+            // Sits below that guard on purpose: in setup mode the portal is
+            // the only way back in, so stopping the radio would strand us.
+            if (!s_radio_off && power::idle_expired(s.wifi_idle_min)) {
+                wifi::stop();
+                s_radio_off = true;
+                screen::set_radio_off(true);
+                ESP_LOGI(kTag, "Wi-Fi stopped after %d idle minutes", s.wifi_idle_min);
+            }
             if (++seconds_since_poll >= kBatteryPollSeconds) {
                 seconds_since_poll = 0;
                 battery::poll();
             }
-            if (wifi::connected() != shown_link || battery_step() != shown_battery ||
-                battery::charging() != shown_charging || battery::on_usb() != shown_usb) {
+            if (wifi::connected() != shown_link || s_radio_off != shown_radio_off ||
+                battery_step() != shown_battery || battery::charging() != shown_charging ||
+                battery::on_usb() != shown_usb) {
                 shown_link = wifi::connected();
+                shown_radio_off = s_radio_off;
                 shown_battery = battery_step();
                 shown_charging = battery::charging();
                 shown_usb = battery::on_usb();
@@ -351,6 +380,7 @@ void run(void *)
             continue;
         }
         power::note_activity();
+        wake_radio();
         switch (event) {
         case input::Event::AiDown:
             if (!s_setup_mode) {

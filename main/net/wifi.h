@@ -35,7 +35,8 @@ bool connected();
 esp_err_t start_ap(const std::string &ssid);
 
 // RADIO STOPPER
-// Stops station and access point modes.
+// Stops station and access point modes. connect_async brings the station
+// back afterwards, so this is also the idle-timeout power saving.
 void stop();
 
 // ADDRESS GETTERS

@@ -37,6 +37,7 @@ struct Values {
     std::string text_size;    // "small", "medium", "large" or "xlarge" note text
     std::string tz;           // POSIX TZ string
     int sleep_min = 10;       // Idle minutes before deep sleep, 0 disables
+    int wifi_idle_min = 0;    // Idle minutes before the radio stops, 0 disables
     bool beep = true;
 };
 

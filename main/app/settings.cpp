@@ -107,6 +107,7 @@ esp_err_t init()
         load_int(handle, "beep", flag);
         loaded.beep = flag != 0;
         load_int(handle, "sleep_min", loaded.sleep_min);
+        load_int(handle, "wifi_idle_min", loaded.wifi_idle_min);
         nvs_close(handle);
     } else if (err != ESP_ERR_NVS_NOT_FOUND) {
         return err;
@@ -153,6 +154,9 @@ esp_err_t save(const Values &values)
         err = nvs_set_i32(handle, "sleep_min", values.sleep_min);
     }
     if (err == ESP_OK) {
+        err = nvs_set_i32(handle, "wifi_idle_min", values.wifi_idle_min);
+    }
+    if (err == ESP_OK) {
         err = nvs_commit(handle);
     }
     nvs_close(handle);
@@ -179,6 +183,7 @@ std::string to_json()
     cJSON_AddBoolToObject(root, "llm_on", v.llm_on);
     cJSON_AddBoolToObject(root, "beep", v.beep);
     cJSON_AddNumberToObject(root, "sleep_min", v.sleep_min);
+    cJSON_AddNumberToObject(root, "wifi_idle_min", v.wifi_idle_min);
     char *printed = cJSON_PrintUnformatted(root);
     std::string out = printed != nullptr ? printed : "{}";
     cJSON_free(printed);
@@ -218,6 +223,10 @@ bool apply_json(const char *json, std::string &error)
     const cJSON *sleep_min = cJSON_GetObjectItem(root, "sleep_min");
     if (cJSON_IsNumber(sleep_min)) {
         v.sleep_min = sleep_min->valueint < 0 ? 0 : sleep_min->valueint;
+    }
+    const cJSON *wifi_idle_min = cJSON_GetObjectItem(root, "wifi_idle_min");
+    if (cJSON_IsNumber(wifi_idle_min)) {
+        v.wifi_idle_min = wifi_idle_min->valueint < 0 ? 0 : wifi_idle_min->valueint;
     }
     cJSON_Delete(root);
 

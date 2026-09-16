@@ -13,6 +13,7 @@
 #include "esp_crt_bundle.h"
 #include "esp_http_client.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 
 namespace http {
 namespace {
@@ -81,6 +82,12 @@ bool write_all(esp_http_client_handle_t client, const char *data, size_t length)
     return true;
 }
 
+// Milliseconds since boot, for the phase timings in exchange().
+unsigned now_ms()
+{
+    return static_cast<unsigned>(esp_timer_get_time() / 1000);
+}
+
 // Returns true for a status the client should follow to its Location.
 bool is_redirect(int status)
 {
@@ -96,10 +103,13 @@ Response exchange(esp_http_client_handle_t client, size_t body_length,
 {
     Response response;
     for (int hop = 0; hop <= kMaxRedirects; ++hop) {
+        const unsigned started = now_ms();
         response.err = esp_http_client_open(client, body_length);
+        const unsigned connected = now_ms();
         if (response.err == ESP_OK && body_length > 0 && !write_body()) {
             response.err = ESP_FAIL;
         }
+        const unsigned uploaded = now_ms();
         if (response.err == ESP_OK) {
             if (esp_http_client_fetch_headers(client) < 0) {
                 response.err = ESP_FAIL;
@@ -110,6 +120,17 @@ Response exchange(esp_http_client_handle_t client, size_t body_length,
             }
         }
         esp_http_client_close(client);
+
+        // Splits one round trip so a slow note can be blamed on the right
+        // thing: connect is DNS, TCP and the TLS handshake, upload is the
+        // request body going out, and answer is the wait for the reply.
+        // Upload throughput is the number to watch when choosing a codec.
+        const unsigned upload_ms = uploaded - connected;
+        ESP_LOGI(kTag, "hop %d: connect %u ms, upload %u ms (%u bytes, %u kB/s), answer %u ms",
+                 hop, connected - started, upload_ms, static_cast<unsigned>(body_length),
+                 upload_ms > 0 ? static_cast<unsigned>(body_length / upload_ms) : 0u,
+                 now_ms() - uploaded);
+
         if (response.err != ESP_OK || !is_redirect(response.status) || hop == kMaxRedirects) {
             break;
         }

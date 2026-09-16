@@ -75,6 +75,8 @@
     <p class="hint">Longer notes are paged; press Up and Down on the device to scroll.</p>
     <label>Time zone (POSIX TZ)<input id="tz"></label>
     <label>Sleep after idle minutes (0 = never)<input id="sleep_min" type="number" min="0"></label>
+    <label>Turn Wi-Fi off after idle minutes (0 = never)<input id="wifi_idle_min" type="number" min="0"></label>
+    <p class="hint">Stopping the radio saves battery, at the cost of a few seconds' reconnect before the first note. While it is off this settings page is unreachable; press any button on the device to bring the radio back.</p>
     <div class="row"><input id="beep" type="checkbox" style="width:auto"><label for="beep">Beep on record, save, and error</label></div>
   </fieldset>
 
@@ -102,6 +104,7 @@ async function load() {
   el("llm_on").checked = !!s.llm_on;
   el("beep").checked = !!s.beep;
   el("sleep_min").value = s.sleep_min ?? 10;
+  el("wifi_idle_min").value = s.wifi_idle_min ?? 0;
 }
 
 function collect() {
@@ -110,6 +113,7 @@ function collect() {
   out.llm_on = el("llm_on").checked;
   out.beep = el("beep").checked;
   out.sleep_min = parseInt(el("sleep_min").value || "0", 10);
+  out.wifi_idle_min = parseInt(el("wifi_idle_min").value || "0", 10);
   return out;
 }
 

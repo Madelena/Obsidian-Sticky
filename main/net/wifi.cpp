@@ -175,6 +175,11 @@ esp_err_t start_ap(const std::string &ssid)
 void stop()
 {
     s_want_sta = false;
+    // Disarm first, or a watchdog left over from this session fires into the
+    // next connect_async and disconnects an association that is still forming.
+    if (s_dhcp_watchdog != nullptr) {
+        esp_timer_stop(s_dhcp_watchdog);
+    }
     if (s_started) {
         esp_wifi_stop();
         s_started = false;
