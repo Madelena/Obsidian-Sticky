@@ -79,5 +79,5 @@ For the registry route instead, follow `docs/contributing-firmware.md` in the
 and build with an explicit version so the artifact matches `firmware.json`:
 
 ```powershell
-idf.py -D PROJECT_VER=0.5.0 build
+idf.py -D PROJECT_VER=0.6.0 build
 ```
