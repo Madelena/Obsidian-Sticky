@@ -186,8 +186,8 @@ paint the panel on their own: a full refresh costs about a second, and two
 owners means two of them. That bucket is the same one the gauge icon draws
 from, so the panel never paints for a change too small to see, and it is what
 bounds how often an idle device paints at all. It went from twenty 5 percent
-buckets to the icon's five steps when the band stopped showing a number, which
-is a fifth of the idle repaints for the same discharge. The trackers keep moving while the info screen is
+buckets to the icon's own steps when the bar stopped showing a number, which
+is seven repaints over a full discharge rather than twenty. The trackers keep moving while the info screen is
 up, so dismissing it does not trigger a second repaint.
 
 ## Settings

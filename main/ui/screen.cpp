@@ -42,10 +42,11 @@ constexpr int kMeterWidth = kMeterCells * kMeterCellWidth + (kMeterCells - 1) * 
 // Three slots of one pitch, drawn from the right margin inwards. The power
 // slot is reserved whether or not a cable is in, so the aerial and the cell
 // never shift under a change that is not about them.
-constexpr int kSlotPitch = icons::kSlotBox + 12;
-constexpr int kBatteryCx = canvas::kWidth - kMargin - icons::kSlotBox / 2;
-constexpr int kPowerCx = kBatteryCx - kSlotPitch;
-constexpr int kLinkCx = kPowerCx - kSlotPitch;
+constexpr int kIconGap = 12;
+constexpr int kSlotPitch = icons::kSlotBox + kIconGap;
+// The cell is drawn in a wider box than the rest, so the first step in from
+// the margin is half of each box plus the gap rather than a whole pitch.
+constexpr int kBatteryStep = (icons::kBatteryBox + icons::kSlotBox) / 2 + kIconGap;
 // The scroll bar sits inside the right margin rather than taking a column of
 // its own, so the text width does not depend on whether the note overflows.
 constexpr int kScrollGap = 12;
@@ -197,12 +198,10 @@ void draw_status(int level)
     const int top = bar_top();
     const int mid = top + font::title().height / 2;
     canvas::fill_rect(0, top - kEdgeGap, canvas::kWidth, canvas::kHeight - top + kEdgeGap, false);
-    if (s_asleep) {
-        icons::draw_asleep(kMargin + icons::kFaceBox / 2, mid);
-    } else {
-        // An empty status is the resting case and draws nothing at all.
-        canvas::draw_text(font::title(), kMargin, top, text::prepare(s_status).c_str());
-    }
+    // An empty status is the resting case and draws nothing at all. Sleeping
+    // is a mark in the cluster below, not a word, so the left of the bar is
+    // free for whatever the status has to say.
+    canvas::draw_text(font::title(), kMargin, top, text::prepare(s_status).c_str());
 
     if (level >= 0) {
         const int left = canvas::kWidth - kMargin - kMeterWidth;
@@ -222,9 +221,26 @@ void draw_status(int level)
     } else if (wifi::connected()) {
         link = icons::Link::Connected;
     }
-    icons::draw_link(link, kLinkCx, mid);
-    icons::draw_power(battery::charging(), battery::on_usb(), kPowerCx, mid);
-    icons::draw_battery(battery::percent(), kBatteryCx, mid);
+    // Packed against the right margin rather than laid into fixed slots, so a
+    // mark with nothing to say closes the gap up instead of leaving a hole in
+    // the middle of the row. The cell keeps the margin and the rest follow it.
+    //
+    // There is no mark for a cable on its own. USB is the only way to charge
+    // this board, so a trident beside a bolt said the same thing twice, and by
+    // itself it could not say what it looked like it said: the pins that would
+    // see a data connection are the microphone's.
+    int cx = canvas::kWidth - kMargin - icons::kBatteryBox / 2;
+    icons::draw_battery(battery::percent(), cx, mid);
+    cx -= kBatteryStep;
+    if (battery::charging()) {
+        icons::draw_charging(cx, mid);
+        cx -= kSlotPitch;
+    }
+    icons::draw_link(link, cx, mid);
+    if (s_asleep) {
+        cx -= kSlotPitch;
+        icons::draw_asleep(cx, mid);
+    }
 }
 
 

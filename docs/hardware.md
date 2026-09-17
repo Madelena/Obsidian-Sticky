@@ -240,6 +240,21 @@ the side button was therefore dead code, present and unreachable, until this
 was found. Power off lives on a long press of Up instead, matching setup mode
 on a long press of Down.
 
+### A USB data connection cannot be detected at all
+
+The status bar can say a cable is attached but never whether it carries data,
+and no amount of firmware will change that. `PIN_EXTERNAL_POWER` (GPIO9) is
+VBUS presence, which a dumb charger raises exactly as a computer does. The
+only part that could tell them apart is the native USB-Serial-JTAG peripheral,
+and its pads are GPIO19 and GPIO20, which this board wires to the PDM
+microphone: `pdm_mic.cpp` turns the USB PHY pad off on every boot to claim
+them. Detecting data would cost the microphone, which is the whole device.
+
+The CH343 bridge is no help either. It is a separate chip and the SoC sees
+only UART0 on GPIO43/44, with no line reporting whether a host has enumerated
+it. Its DTR and RTS go to EN and IO0 for auto-reset, as outputs into the SoC,
+not as readable inputs.
+
 ### The BQ27220 discharge bit is the wrong way to detect charging
 
 A full pack sitting on a cable is not discharging either, so the discharge bit

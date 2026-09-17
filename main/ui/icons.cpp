@@ -11,14 +11,14 @@
 namespace icons {
 namespace {
 
-// Blits one baked icon, placing its ink by the offsets the generator stored
-// rather than by its own bounds, which is what keeps the states of a family
-// on the same line however much ink each of them has.
+// Blits one baked icon centered on its own ink, which is what puts every mark
+// in the bar on one optical line. Centering their em squares instead left the
+// inks up to 2.5 px apart, because a glyph sits where its own design says.
 void blit(IconId id, int center_x, int center_y)
 {
     const Icon &icon = icon_table[id];
-    const int left = center_x + icon.x_offset;
-    const int top = center_y + icon.y_offset;
+    const int left = center_x - icon.width / 2;
+    const int top = center_y - icon.height / 2;
     const int row_bytes = (icon.width + 7) / 8;
     const uint8_t *const rows = icon_bitmap + icon.offset;
     for (int y = 0; y < icon.height; ++y) {
@@ -51,20 +51,18 @@ void draw_link(Link link, int center_x, int center_y)
 }
 
 
-void draw_power(bool charging, bool on_usb, int center_x, int center_y)
+void draw_charging(int center_x, int center_y)
 {
-    if (charging) {
-        blit(kIconBolt, center_x, center_y);
-    } else if (on_usb) {
-        blit(kIconPlug, center_x, center_y);
-    }
+    blit(kIconBolt, center_x, center_y);
 }
 
 
 void draw_battery(int percent, int center_x, int center_y)
 {
+    // Indexed by battery_step(), so the order here is the order of its return.
     static const IconId kSteps[] = {
-        kIconBatteryLow, kIconBattery25, kIconBattery50, kIconBattery75, kIconBatteryFull,
+        kIconBatteryLow, kIconBattery1, kIconBattery2, kIconBattery3,
+        kIconBattery4,   kIconBattery5, kIconBattery6, kIconBatteryFull,
     };
     const int step = battery_step(percent);
     blit(step < 0 ? kIconBatteryUnknown : kSteps[step], center_x, center_y);
@@ -79,9 +77,11 @@ int battery_step(int percent)
     if (percent < 10) {
         return 0;
     }
-    // Nearest quarter, so the thresholds are the midpoints 87.5, 62.5 and
-    // 37.5 taken up to the next whole percent the gauge can report.
-    return percent >= 88 ? 4 : percent >= 63 ? 3 : percent >= 38 ? 2 : 1;
+    // The family draws seven fills, i/7 full for step i, so the nearest one is
+    // percent scaled to sevenths with the +50 rounding the halves up. Ten
+    // percent lands on 1, which is why the warning mark takes everything under
+    // it rather than sharing a step.
+    return (percent * 7 + 50) / 100;
 }
 
 }  // namespace icons

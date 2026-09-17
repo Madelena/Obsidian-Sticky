@@ -926,7 +926,6 @@ void run(void *)
     bool shown_radio_off = s_radio_off;
     int shown_battery = battery_step();
     bool shown_charging = battery::charging();
-    bool shown_usb = battery::on_usb();
     uint32_t seconds_since_poll = 0;
 
     while (true) {
@@ -958,13 +957,11 @@ void run(void *)
                 battery::poll();
             }
             if (wifi::connected() != shown_link || s_radio_off != shown_radio_off ||
-                battery_step() != shown_battery || battery::charging() != shown_charging ||
-                battery::on_usb() != shown_usb) {
+                battery_step() != shown_battery || battery::charging() != shown_charging) {
                 shown_link = wifi::connected();
                 shown_radio_off = s_radio_off;
                 shown_battery = battery_step();
                 shown_charging = battery::charging();
-                shown_usb = battery::on_usb();
                 // Trackers still move while the info screen is up, so
                 // dismissing it does not trigger a second repaint.
                 if (!s_info_showing) {

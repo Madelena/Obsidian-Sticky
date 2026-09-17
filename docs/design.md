@@ -97,9 +97,8 @@ only the states that need naming keep a word.
 | Wi-Fi connected | `wifi` |
 | Wi-Fi stopped | `wifi_off` |
 | Wi-Fi lost | `signal_wifi_bad` |
-| Charging | `bolt` |
-| On USB, not charging | `power` |
-| Battery, four quarters | `battery_android_full`, `_5`, `_3`, `_1` |
+| Charge flowing in | `bolt` |
+| Battery, seven fills | `battery_android_frame_1` to `_6` and `_full` |
 | Battery under 10 percent | `battery_android_alert` |
 | Gauge did not answer | `battery_android_question` |
 
@@ -120,13 +119,13 @@ nothing to report:
 
 Sleeping keeps its moon rather than a word, because that screen outlives the
 power being cut and has to say by itself that the device is off rather than
-frozen.
+frozen. The moon sits at the left of the right-hand cluster and not at the
+left of the bar, which is kept clear for whatever the status has to say.
 
 The marks are Material Symbols rather than shapes drawn by hand, because
 Google already solved legibility at this size and a set that was designed
-together reads as a set. `tools/gen_icons.py` bakes them to 1-bit at 40 px for
-the face and 34 px for the right-hand cluster, outlined rather than filled and
-at weight 500: a panel with no anti-aliasing has nothing to soften a hairline
+together reads as a set. `tools/gen_icons.py` bakes them to 1-bit at 34 px,
+outlined rather than filled and at weight 500: a panel with no anti-aliasing has nothing to soften a hairline
 with, and 400 breaks up under the threshold.
 
 Sleeping is a crescent moon and not a sleeping face, which is what the design
@@ -136,22 +135,80 @@ from across a room. That last point is the argument: this is a device on a
 fridge. `mood` was baked for Ready before Ready lost its mark, and was dropped
 from `tools/gen_icons.py` with it rather than left in the binary.
 
-The cell is quantized to five drawings and shows no number. It lands on the
-nearest quarter, so the thresholds are 87.5, 62.5 and 37.5 percent, and
-anything under 10 percent is the warning mark instead. A precise reading is a
-thing you go and look up, not a thing you glance at, so the percentage lives
-on the info screen. `icons::battery_step()` is both the drawing and the
-repaint trigger, so the panel cannot paint for a change too small to see.
+There is no mark for a cable on its own. A `usb` trident sat beside the bolt
+for a while, and it had to go: USB is the only way to charge this board, so
+next to a bolt it said the same thing twice, and on its own it could not say
+the thing it looked like it was saying. The only fact behind it is VBUS on
+`PIN_EXTERNAL_POWER`, which a dumb charger raises exactly as a computer does,
+and the pins that could tell those apart are the microphone's.
+`docs/hardware.md` has the detail.
 
-The four quarters are not the four adjacent members of the `battery_android`
-family. That family is a seven step fill, so taking every other step keeps the
-four drawings visibly apart; adjacent ones differ by too little to count at a
-glance.
+What is left is one mark for the one fact worth showing: the bolt, whenever
+charge is flowing into the pack. A full battery on a lead shows nothing, which
+is honest, because a full battery on a lead is doing nothing. `battery::on_usb()`
+came out of the idle repaint check with the mark, so plugging into a full pack
+no longer costs a refresh for a screen that would not change.
 
-Every icon is centered in its em square rather than on its own ink, and
-`tools/gen_icons.py` stores the offsets that make that work. Otherwise the
-three Wi-Fi states, whose ink differs by the 2 px of a slash, would each sit
-on a slightly different line.
+The cluster is packed against the right margin rather than laid into fixed
+slots, so the row closes up when the cable comes out instead of leaving a hole
+where the power mark was. `icons::draw_power()` returns whether it drew, which
+is what lets `draw_status()` place the next mark without repeating the rule
+for when there is one at all. Right to left the order is battery, power,
+aerial, moon, so the reading that changes most often keeps the margin.
+
+The cell shows no number. It uses the whole `battery_android_frame` family,
+which is a seven step fill, and lands on the nearest of them, so each drawing
+covers 14 points of charge:
+
+| Percent | Icon |
+| --- | --- |
+| 93 to 100 | `_full` |
+| 79 to 92 | `_6` |
+| 65 to 78 | `_5` |
+| 50 to 64 | `_4` |
+| 36 to 49 | `_3` |
+| 22 to 35 | `_2` |
+| 10 to 21 | `_1` |
+| under 10 | `_alert` |
+
+`battery_step()` is the scaling `(percent * 7 + 50) / 100`, which is the
+nearest seventh with halves rounded up, rather than a ladder of thresholds
+that would have to be kept in step with the family by hand. The warning mark
+takes everything under 10 rather than sharing a step with `_1`.
+
+It used to be four quarters taken from every other member, because adjacent
+fills differ by about 4 px and are hard to tell apart across a room. The
+finer scale was chosen anyway: a gauge that moves is worth more than one you
+can read exactly, and the exact figure is on the info screen for when you want
+it. A precise reading is a thing you go and look up, not a thing you glance
+at.
+
+The two marks that are not a reading, `_alert` and `_question`, come from the
+plain `battery_android` family rather than the frame one. `frame_alert` and
+`frame_question` draw a cell that looks full with the mark outside it, so a
+flat battery would read as a charged one. The plain pair draw an empty cell
+with the mark inside, which is what those states mean.
+
+The cell is baked at 52 px against 34 px for everything else, both because its
+fill is a reading where the others are a yes or no, and because the frame's
+stroke only lands on whole pixels at certain sizes. Between 44 and 48 the
+horizontal strokes rasterize a pixel thicker than the vertical ones and the
+outline reads as lopsided; 50 to 54 is the nearest even band.
+
+`icons::battery_step()` is both the drawing and the repaint trigger, so the
+panel cannot paint for a change too small to see. A full discharge now crosses
+seven thresholds rather than four, still well under the twenty it crossed when
+the bar carried a number.
+
+Every icon is centered on its own ink, which `tools/gen_icons.py` gets by
+cropping each glyph to its bounds and letting `blit()` halve the result. It
+used to center the em squares instead, on the reasoning that a family's
+members would then never shift against each other. That was the wrong thing
+to protect: the squares are all the same but the ink inside them is not, so
+the marks sat up to 2.5 px apart on a line where they are seen together,
+to spare the three Wi-Fi states a 1 px shift between states that are never
+seen at once. Centering the ink puts the whole cluster within half a pixel,
+which is the rounding of an odd height against an even one and nothing more.
 
 ## Text sizes
 
@@ -467,9 +524,8 @@ powered-off one.
 
 Small choices that were made deliberately.
 
-- The icon slots are fixed, including the power slot that is empty on
-  battery, so the aerial and the cell never shift under a change that is not
-  about them.
+- The icons are packed against the right margin, so a state with nothing to
+  say takes up no room. The cell is the anchor and never moves.
 - The bolt means charge is actually flowing into the pack and the plug means
   a cable is attached but the pack is full. Conflating those was a bug;
   `docs/hardware.md` explains why the gauge's discharge bit cannot tell them
@@ -538,8 +594,8 @@ the backlog absorbs the rest of the recording until the drain retries it.
   cannot each decide to paint.
 - Dropping the battery percentage bought most of an idle device's refreshes
   back. A full discharge used to cross twenty 5 percent buckets and now
-  crosses the gauge icon's four thresholds, so the battery asks for a fifth of
-  the repaints it did when the band carried a number.
+  crosses the gauge icon's seven, so the battery asks for around a third of
+  the repaints it did when the bar carried a number.
 - Partial refreshes accumulate ghosting, so `refresh_partial()` promotes every
   twentieth to a full one, and the screens the user sits and reads ask for a
   full refresh outright.

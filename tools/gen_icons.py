@@ -30,26 +30,34 @@ FILL, GRAD, WEIGHT = 0, 0, 500
 # Pixels darker than this become black, matching tools/gen_font.py.
 THRESHOLD = 128
 
-# The band uses two sizes: the sleep mark stands in for a headline, and the
-# right-hand cluster is secondary.
-FACE_PX = 40
+# Every mark sits in the one right-hand cluster. The cell is drawn larger
+# than the rest because its fill is a reading and the others are a yes or no.
 SLOT_PX = 34
+# Fifty-two, not a rounder number: the frame's stroke lands on whole pixels
+# here. From 44 to 48 the horizontal strokes rasterize a pixel thicker than
+# the vertical ones and the outline reads as lopsided.
+BATTERY_PX = 52
 
 # C enum suffix, Material Symbols glyph name, pixel size. Order is the order
 # of the generated IconId enum, so it must not be shuffled casually.
 ICONS = [
-    ("Bedtime", "bedtime", FACE_PX),
+    ("Bedtime", "bedtime", SLOT_PX),
     ("Wifi", "wifi", SLOT_PX),
     ("WifiOff", "wifi_off", SLOT_PX),
     ("WifiBad", "signal_wifi_bad", SLOT_PX),
     ("Bolt", "bolt", SLOT_PX),
-    ("Plug", "power", SLOT_PX),
-    ("BatteryFull", "battery_android_full", SLOT_PX),
-    ("Battery75", "battery_android_5", SLOT_PX),
-    ("Battery50", "battery_android_3", SLOT_PX),
-    ("Battery25", "battery_android_1", SLOT_PX),
-    ("BatteryLow", "battery_android_alert", SLOT_PX),
-    ("BatteryUnknown", "battery_android_question", SLOT_PX),
+    # The frame variants for the seven readings. Not for the two marks below:
+    # frame_alert and frame_question draw a cell that looks full with the mark
+    # outside it, so a flat battery would read as a charged one.
+    ("BatteryLow", "battery_android_alert", BATTERY_PX),
+    ("Battery1", "battery_android_frame_1", BATTERY_PX),
+    ("Battery2", "battery_android_frame_2", BATTERY_PX),
+    ("Battery3", "battery_android_frame_3", BATTERY_PX),
+    ("Battery4", "battery_android_frame_4", BATTERY_PX),
+    ("Battery5", "battery_android_frame_5", BATTERY_PX),
+    ("Battery6", "battery_android_frame_6", BATTERY_PX),
+    ("BatteryFull", "battery_android_frame_full", BATTERY_PX),
+    ("BatteryUnknown", "battery_android_question", BATTERY_PX),
 ]
 
 
@@ -84,13 +92,9 @@ def code_points(path, names):
 
 # THE ICON RASTERIZER
 # Renders one glyph on its baseline, crops to the ink and returns
-# (bitmap_bytes, width, height, x_offset, y_offset), the offsets being the
-# ink's corner relative to the center of the em square.
-#
-# Every Material Symbols glyph advances exactly one em and stands on the
-# baseline, so measuring from that square rather than from the ink is what
-# keeps the three Wi-Fi states, whose ink differs by 2 px of slash, on the
-# same line in the band.
+# (bitmap_bytes, width, height). The crop is the point: icons.cpp centers what
+# it is handed, so cropping to the ink is what puts every mark in the bar on
+# one optical line whatever its own em square was doing.
 def rasterize(path, code, size):
     font = ImageFont.truetype(path, size)
     font.set_variation_by_axes([FILL, GRAD, min(max(size, 20), 48), WEIGHT])
@@ -109,8 +113,7 @@ def rasterize(path, code, size):
         for x in range(width):
             if px[left + x, top + y] >= THRESHOLD:
                 out[y * row_bytes + x // 8] |= 0x80 >> (x % 8)
-    center = pad + size // 2
-    return bytes(out), width, height, left - center, top - center
+    return bytes(out), width, height
 
 
 # THE HEADER WRITER
@@ -122,8 +125,8 @@ def main(argv):
 
     entries, bitmap = [], bytearray()
     for suffix, name, size in ICONS:
-        data, width, height, dx, dy = rasterize(path, codes[name], size)
-        entries.append((suffix, name, size, len(bitmap), width, height, dx, dy))
+        data, width, height = rasterize(path, codes[name], size)
+        entries.append((suffix, name, size, len(bitmap), width, height))
         bitmap += data
 
     with open(out_path, "w", newline="\n") as f:
@@ -142,9 +145,8 @@ def main(argv):
             f.write(f"    kIcon{entry[0]},\n")
         f.write("    kIconCount,\n};\n\n")
         f.write("static const Icon icon_table[kIconCount] = {\n")
-        for _, name, size, offset, width, height, dx, dy in entries:
-            f.write(f"    {{{offset}, {width}, {height}, {dx}, {dy}}},"
-                    f"  // {name} at {size} px\n")
+        for _, name, size, offset, width, height in entries:
+            f.write(f"    {{{offset}, {width}, {height}}},  // {name} at {size} px\n")
         f.write("};\n")
     print(f"{out_path}: {len(entries)} icons, {len(bitmap)} bytes")
 
