@@ -51,10 +51,12 @@ environments. Do not edit `sdkconfig`; change `sdkconfig.defaults`, delete
 - Every new `.cpp` under `main/` must be added to the `SRCS` list in
   `main/CMakeLists.txt`. A file missing from `SRCS` links cleanly and silently
   does nothing.
-- Line endings are per file and mixed: `main/app/input.*`, `main/ui/display.*`,
-  `main/audio/clip.*`, `main/net/http.*` and most of `docs/` are CRLF, the rest
-  is LF. An edit that rewrites a file wholesale silently converts them, so
-  match the file you are in and re-check before committing.
+- The repository stores LF (`.gitattributes` sets `* text=auto`) but this
+  checkout has `core.autocrlf=true`, so a freshly checked out file is CRLF in
+  the working tree while anything an editor has rewritten since is LF. The mix
+  is therefore per file and drifts. Check the file you are about to edit rather
+  than assuming: a search string with the wrong ending simply never matches,
+  and a wholesale rewrite converts the whole file silently.
 - Never refresh the display or touch I2C from a button callback. Callbacks run
   in the button component's timer context. Post an `input::Event` and let the
   pipeline task do the work.
