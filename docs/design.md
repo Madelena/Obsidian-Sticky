@@ -32,7 +32,7 @@ constants are at the top of `main/ui/screen.cpp`.
 | --- | --- | --- |
 | Body | y 28 to 20 down to y 406, the top depending on the face, the bottom on the caption | The note, wrapped, and a position bar in the right margin when it overflows |
 | Caption | One 22 px line at y 375, hidden when empty | A failure reason, or a note that the raw text was saved |
-| Status | One 30 px line at y 418, clearing the bottom edge by 24 px, no rule over it | The state, left, as a word in bold 30 px or nothing at all. The marks, right, packed against the margin: the cell in a 52 px box, the rest in 34 px ones |
+| Status | One 30 px line at y 418, clearing the bottom edge by 24 px, no rule over it | The state, left, as a word in bold 30 px, or the note's own date in the same face when there is no state to report. The marks, right, packed against the margin: the cell in a 52 px box, the rest in 34 px ones |
 
 Margins are 36 px on the top, left and right alike, and the note keeps 12 px
 clear of the bar below it. The head margin is measured to the ink and not to
@@ -114,8 +114,9 @@ nothing to report:
 
 - Working: Connecting Wi-Fi, Listening M:SS, Transcribing, Transcribing n/N,
   Cleaning up, Saving.
-- Done: Saved HH:MM, which is a receipt and stays until the next thing
-  happens, so the band is rarely blank in normal use.
+- Done: Saved today at 9:05, which is a receipt. A minute later the first word
+  drops and it settles to Today at 9:05, the date the band carries for every
+  note from then on.
 - Nothing to save: No speech detected.
 - Failed, each with a reason in the caption and "Press Down to retry.":
   No Wi-Fi, Transcribe failed, Save failed, Microphone error.
@@ -155,9 +156,9 @@ no longer costs a refresh for a screen that would not change.
 
 The cluster is packed against the right margin rather than laid into fixed
 slots, so the row closes up when the cable comes out instead of leaving a hole
-where the power mark was. `icons::draw_power()` returns whether it drew, which
-is what lets `draw_status()` place the next mark without repeating the rule
-for when there is one at all. Right to left the order is battery, power,
+where the power mark was. `draw_status()` walks the cluster right to left,
+advancing the cursor only for a mark it actually drew, so the rule for whether
+there is one lives in one place. Right to left the order is battery, power,
 aerial, moon, so the reading that changes most often keeps the margin.
 
 The cell shows no number. It uses the whole `battery_android_frame` family,
@@ -255,7 +256,7 @@ device read at arm's length on a fridge or a desk. Every label then shifted
 down one step, so what had been Medium became Small, while the internal face
 names stayed where they were. The face named `large` is the setting named
 `medium`.
-`note_face()` in `main/ui/screen.cpp` is the whole mapping. Do not rename
+`fixed_face()` in `main/ui/screen.cpp` is the whole mapping. Do not rename
 either side to make them agree: the setting strings are stored in NVS and the
 face names are in the generated headers.
 
@@ -389,9 +390,12 @@ Three buttons and one gesture, no chords.
 | Hold Up 3 s while latched | Abandon the recording. Nothing is saved. |
 | Swipe up on the glass | Show the next screen of a long note. |
 | Swipe down on the glass | Show the previous screen. |
-| Press Up | Scroll back through a long note. At the top it opens the info screen instead. |
+| Swipe left on the glass | Bring the next older note in from the right. |
+| Swipe right on the glass | Bring the newer note, or the info screen, in from the left. |
+| Press Up | Scroll back through a long note. With nothing further up it steps to the newer note, and from the current note to the info screen. |
+| Tap Up twice | Jump straight back to the current note, from anywhere. |
 | Hold Up 3 s | Power off. The panel keeps a "Powered off" page telling you to hold the side button to come back. |
-| Press Down | Scroll on. After a failure it retries the failed stage instead. |
+| Press Down | Scroll on. With nothing further down it steps to the next older note. After a failure it retries the failed stage instead. |
 | Hold Down 3 s | Enter setup mode, or restart when already in it. |
 
 The side button carries both gestures rather than a setting choosing between
@@ -414,13 +418,24 @@ one, so without a ceiling a press in a pocket would record and upload until
 the battery was flat. A held recording needs no ceiling because the hand is
 the limit.
 
-Up and Down were meant to stop scrolling once the swipe took over, freeing
-them for something else. They still scroll, because no unit has yet been seen
-reporting a touch: the GT911 in every one tested comes up with no
-configuration loaded and never reports a coordinate. `docs/hardware.md` has
-the evidence. Until one does, removing the buttons would leave a long note
-with no way to scroll at all, so the HOTFIX in `main/app/pipeline.cpp` keeps
-them and names the condition for taking them out.
+Up and Down carry two jobs each, scrolling within a note and then stepping to
+the next one at the edge. They were once meant to stop scrolling when the swipe
+took over; they no longer are. No unit has been seen reporting a touch, the
+GT911 in every one tested coming up with no configuration loaded, so the
+buttons are the only input that certainly works, and an input that has to do
+everything has to be overloaded. The glass, having two axes, does not: vertical
+scrolls and horizontal steps, and neither ever does the other's job.
+
+The overload is not a compromise in practice. A note that fits one screen has
+nothing to scroll, so the first press steps straight to the next note, and
+under `auto` that is most notes. Only a long note makes you page through it
+first, and the position bar in the right margin is already telling you why.
+
+Double-tapping Up is the way out of a deep history: it returns to the current
+note from anywhere, in one step and one refresh. It costs the single press
+nothing, because the button component already waits out the same window before
+reporting a single click whether or not anything is listening for a double.
+`docs/hardware.md` has that state machine and the two holes in it.
 
 Power off lives on Up for a hardware reason, not a design one: the side
 button cannot carry a long press at all, because holding it is how recording
@@ -433,22 +448,35 @@ has the pipeline task blocked. `docs/hardware.md` has the full account.
 Implemented and unverified. Everything below is the intended design, and the
 gesture has never run on a working controller.
 
-The panel is powered only while a swipe would do something: a note that
-overflows, showing on the screen that scrolls. A note that fits leaves the
-controller unpowered, which is most notes under `auto`. That is a power
-decision first, since the controller draws milliamps and this device is meant
-to sit on a fridge, but it is also the honest one: an input that cannot act
-should not be listening.
+The two axes mean different things and never overlap. Vertical scrolls within
+a note. Horizontal steps between notes. The buttons have to overload those two
+jobs because they are one axis; the glass does not, and a gesture that both
+scrolled and turned a page would be one movement with two meanings.
 
-A gesture has to travel an eighth of the screen and be more vertical than
-horizontal before it counts. The device is picked up by its glass, and a grab
-must not scroll the note out from under the person holding it.
+The panel is powered only while a swipe would do something, which is now either
+a note that overflows or somewhere to step to. Since any stored history gives
+somewhere to step, that is most of the time the device is awake, where it used
+to be only during a long note. The principle has not changed, an input that
+cannot act should not be listening, but the input can now act far more often.
+It is worth measuring the standby draw once a controller works; the fallback is
+to power it only for a scrollable note and accept that a horizontal swipe then
+needs a long one.
 
-The text should follow the finger, as it does everywhere else: swiping up
-brings up what was below the last visible line. `kInvertY` in
-`main/board/touch.cpp` is the one constant that decides this, because the
-controller's own axis does not have to agree with the way the canvas reaches
-the glass. Which way it belongs is a guess until a coordinate arrives.
+A gesture has to travel an eighth of the screen along its dominant axis before
+it counts, and the threshold is per axis because the screen is 800 by 480: one
+number for both would make a horizontal swipe too easy or a vertical one too
+hard. The device is picked up by its glass, and a grab must neither scroll the
+note nor turn the page out from under the person holding it.
+
+The content should follow the finger on both axes. Swiping up brings up what
+was below the last visible line; swiping left brings the older note in from the
+right, the way a photo carousel moves. `kInvertY` and `kInvertX` in
+`main/board/touch.cpp` are the two constants that decide this, because the
+controller's own axes do not have to agree with the way the canvas reaches the
+glass. The canvas is rotated 180 degrees, which inverts both, so they are set
+together and are a guess until a coordinate arrives. `kInvertX` did not exist
+while only the vertical axis meant anything, which is exactly the kind of bug
+that hides until a second axis is given a job.
 
 ### Switching on
 
@@ -468,6 +496,69 @@ button has been held right through boot, so the release that follows says
 nothing about how long it was down, and every wake press would latch a
 recording nobody asked for.
 
+### The note history
+
+The device keeps the last ten notes, a number the owner can set from 1 to 20,
+and they lie in one strip with the info screen at one end:
+
+```
+Info  <-  the current note  ->  older 1  ->  older 2  ->  ...
+```
+
+There is no list, no menu and no index. That was the point: a strip you walk
+along is the same interaction the single note already had, where Up at the top
+opened the info screen, extended in the one direction that was still free.
+Adding a list would have added the mode this design does not have.
+
+**There is no position indicator**, no "2 of 10" and no row of dots. The date
+identifies the note you are on, which is what a reader actually wants to know,
+and double-tapping Up is always the way back, so there is nothing to navigate
+by count. The cost is honest: on a device whose clock has never synced there is
+no date either, and paging then gives no feedback but the text itself.
+
+**A recording does not move you.** Start one while reading an older note and
+you stay there: you come back to that note, at the line you were on, if nothing
+was said or you abandon it. You return to the current note the moment the
+recording produces something that note has to hold, which means a successful
+save and equally a failed one, since a failure leaves a transcript wanting a
+retry. Nothing produced, nothing moved.
+
+### When the note was recorded
+
+The status band carries the note's own date whenever it has no state to report,
+in the same 30 px bold a state word uses, because the two never need to appear
+at once:
+
+| When | Reads |
+| --- | --- |
+| Same calendar day | Today at 9:05 |
+| The day before | Yesterday at 14:02 |
+| Two to six days back | Wednesday at 9:05 |
+| Further back | Sep 10 at 9:05 |
+
+The time is 24-hour with no leading zero, or 12-hour as "9:05 am" when the
+owner asks for it. The day is a **calendar** day and not a 24-hour block, so a
+note made at 23:00 last night reads Yesterday from midnight, not from 23:00
+tonight. Past a week the weekday name stops naming one particular day, so the
+date takes over.
+
+The stamp is when **recording started**, not when the save finished, because
+that is when the thing was said; it survives a retry minutes later, and a clock
+that only syncs mid-recording is resolved backwards from the monotonic timer
+rather than guessed. The wording is worked out at draw time from that one
+number, never formatted and cached, or "Today" would still say Today after
+midnight.
+
+A note with no stamp at all draws **nothing**, which is exactly what the band
+looked like at rest before any of this. That covers the note carried over from
+a firmware that never recorded times, and any note saved before the clock had
+synced. Drawing the number anyway would date them all to Jan 1.
+
+"Saved today at 9:05" is the one place the date shares the slot with a state,
+and it holds for a minute before dropping its first word. The receipt is the
+only thing that says the save worked, so it earns that minute; after it the
+date is no less true and says more, so there is nothing to keep.
+
 ### The info screen
 
 It has no timeout. It previously dismissed itself after 12 seconds and the
@@ -475,15 +566,23 @@ owner rejected that: "There should not be a timeout moving from the status
 screens back to the Notes screen. It should just stay at the screen the user
 has chosen." It now stays until a button dismisses it.
 
-Two consequences in the event loop in `main/app/pipeline.cpp`:
+It is now the slot one step newer than the current note, rather than an overlay
+over it, so leaving it is a direction and not a dismissal: Down, or a leftward
+swipe, walks back to the note. That is the same rule as everywhere else on the
+strip, and it is why any press no longer dismisses it.
 
-- A press of the side button records rather than merely dismissing, because
-  that is plainly what pressing it means. Every other button dismisses and
-  does nothing else.
-- Idle repaints are suppressed while `s_info_showing` holds, so a battery
-  change cannot pull the screen away from someone reading it. The trackers
-  keep moving underneath, so dismissing it does not then trigger a repaint of
-  its own.
+Three consequences in the event loop in `main/app/pipeline.cpp`:
+
+- A press of the side button records rather than merely stepping off, because
+  that is plainly what pressing it means. A recording begun here comes back
+  here if nothing was said; if something was, the note it produced is what you
+  land on, because a status word like "No speech detected" needs a status band
+  to appear in and this page has none.
+- The two holds still power off and enter setup. A deliberate three-second hold
+  means what it physically means, wherever you are standing.
+- Idle repaints are suppressed while `s_view` is -1, so a battery change cannot
+  pull the screen away from someone reading it. The trackers keep moving
+  underneath, so stepping off does not then trigger a repaint of its own.
 
 The facts are a borderless two column table: Wi-Fi, IP address, Battery and
 Saving to, with one column set by the widest label so the values line up
@@ -578,9 +677,13 @@ Nothing a person said out loud should ever be lost to a transient error.
   how many parts are missing. Withholding nine good minutes over one bad
   segment is the worse failure, and a ten-minute recording makes it possible
   in a way a ninety-second one never did.
-- The last saved note is kept in NVS, so it is still on screen after a reboot
-  or a wake from deep sleep. NVS caps a string near 4 KB, so a long note is
-  cut at a code point boundary for that copy alone; the vault has all of it.
+- The last ten saved notes are kept in flash, in their own `notes` partition,
+  so the latest is still on screen after a reboot, a wake from deep sleep or a
+  full power off, and the nine before it are a few button presses away. The
+  count is a setting from 1 to 20. Each is capped at 8192 bytes and cut at a
+  code point boundary; the vault has all of it either way. The old single-note
+  copy capped at 3900 bytes because NVS caps a *string* near 4 KB, and storing
+  a blob instead lifted that.
 
 Segments are released strictly oldest first, because a ring can only free
 from its tail. That is why a failed segment stops the uploader rather than
@@ -623,3 +726,11 @@ setup and on the LAN address afterwards. Decisions worth keeping:
   text size is visible at once rather than at the next capture. The redraw is
   skipped in captive mode, where the setup instructions own the panel and
   there is no note behind them.
+- Saving also re-applies the time zone, which used to wait for a reboot. A
+  wrong zone was once an hour out in "Saved 09:05" and easy to miss; now it can
+  say the wrong day of the week, so it has to take effect where it is set.
+- "Notes kept on the device" is 1 to 20 and the page says what it is not: every
+  note is already in the vault, and this is only the copy kept for reading on
+  the screen. Lowering it drops the oldest immediately. It floors at 1 rather
+  than 0, because the newest note surviving a reboot is a promise the device
+  has always made and not something a setting should be able to switch off.

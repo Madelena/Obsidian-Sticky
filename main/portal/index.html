@@ -74,10 +74,13 @@
     <label>Device name<input id="device_name" maxlength="32" placeholder="Obsidian Sticky"></label>
     <p class="hint">The heading on the device's info screen, and the name it gives your router, so you can often reach this page at http://thename/ instead of the IP address. Letters and digits become the hostname and everything else becomes a hyphen. The router only sees a new name after the device restarts. Leave it blank to go back to Obsidian Sticky.</p>
     <label>Note text size<select id="text_size"><option value="auto">Auto (largest that fits the note)</option><option value="small">Small (about 9 lines)</option><option value="medium">Medium (about 7 lines)</option><option value="large">Large (about 5 lines)</option><option value="xlarge">Extra large (about 4 lines)</option></select></label>
-    <p class="hint">Auto picks the largest size that shows the whole note at once. A note too long for one screen scrolls: swipe up and down on the device's screen.</p>
+    <p class="hint">Auto picks the largest size that shows the whole note at once. A note too long for one screen scrolls: press Up and Down, or swipe up and down on the device's screen.</p>
     <label>Note text font<select id="text_font"><option value="inter">Inter (sans)</option><option value="atkinson">Atkinson Hyperlegible (sans, high legibility)</option><option value="opensans">Open Sans (humanist sans)</option><option value="literata">Literata (serif)</option><option value="shantell">Shantell Sans (handwriting)</option></select></label>
     <p class="hint">Latin letters only; Chinese always uses the built-in Noto Sans TC. All five are baked to the same capital height, so switching changes the shapes and not the size or the number of lines that fit.</p>
     <label>Time zone (POSIX TZ)<input id="tz"></label>
+    <div class="row"><input id="hour12" type="checkbox" style="width:auto"><label for="hour12">Show times as 12-hour (9:05 am) instead of 24-hour (9:05)</label></div>
+    <label>Notes kept on the device<input id="history_max" type="number" min="1" max="20"></label>
+    <p class="hint">How many past notes you can page back through with the Up and Down buttons. Every note is already saved to your vault; this is only the copy the device keeps for reading on the screen. 1 keeps just the latest.</p>
     <label>Sleep after idle minutes (0 = never)<input id="sleep_min" type="number" min="0"></label>
     <label>Turn Wi-Fi off after idle minutes (0 = never)<input id="wifi_idle_min" type="number" min="0"></label>
     <p class="hint">Stopping the radio saves battery, at the cost of a few seconds' reconnect before the first note. While it is off this settings page is unreachable; press any button on the device to bring the radio back.</p>
@@ -107,6 +110,8 @@ async function load() {
   secret.forEach(k => el(k).placeholder = s[k + "_set"] ? "(saved, leave blank to keep)" : "");
   el("llm_on").checked = !!s.llm_on;
   el("beep").checked = !!s.beep;
+  el("hour12").checked = !!s.hour12;
+  el("history_max").value = s.history_max ?? 10;
   el("sleep_min").value = s.sleep_min ?? 10;
   el("wifi_idle_min").value = s.wifi_idle_min ?? 0;
 }
@@ -116,6 +121,8 @@ function collect() {
   text.concat(secret).forEach(k => out[k] = el(k).value);
   out.llm_on = el("llm_on").checked;
   out.beep = el("beep").checked;
+  out.hour12 = el("hour12").checked;
+  out.history_max = parseInt(el("history_max").value || "10", 10);
   out.sleep_min = parseInt(el("sleep_min").value || "0", 10);
   out.wifi_idle_min = parseInt(el("wifi_idle_min").value || "0", 10);
   return out;

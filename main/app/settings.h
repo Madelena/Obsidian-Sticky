@@ -17,6 +17,11 @@ namespace settings {
 // says what is running on it.
 constexpr const char *kProductName = "Obsidian Sticky";
 
+// Ceiling on history_max. The notes partition is sized for this many at the
+// per-note cap in app/history.cpp, and 1 is the floor because the newest note
+// has always survived a reboot and switching that off is not a setting.
+constexpr int kHistoryMax = 20;
+
 struct Values {
     std::string wifi_ssid;
     std::string wifi_pass;
@@ -46,6 +51,8 @@ struct Values {
     int sleep_min = 10;       // Idle minutes before deep sleep, 0 disables
     int wifi_idle_min = 0;    // Idle minutes before the radio stops, 0 disables
     bool beep = true;
+    bool hour12 = false;      // Clock on the status band: 12-hour instead of 24
+    int history_max = 10;     // Notes kept on the device, 1 to kHistoryMax
 };
 
 // SETTINGS INITIALIZER

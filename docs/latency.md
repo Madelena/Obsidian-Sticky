@@ -48,6 +48,8 @@ transcription, Anthropic for cleanup, Obsidian's Local REST API on the LAN.
 | Obsidian on the LAN, per hop | connect 6 to 45 ms, answer 47 to 132 ms |
 | Obsidian 307 redirect, the extra hop | about 120 ms |
 | Raw audio on the wire | exactly 32000 bytes per second |
+| One step through the note history | one partial refresh, every 20th promoted to a full |
+| Storing a saved note in the ring | an NVS blob commit of up to 8192 bytes, after the receipt is drawn |
 
 The audio rate is arithmetic, not a measurement: `main/audio/clip.cpp` writes
 16 kHz mono 16-bit PCM into a 44-byte WAV header, so a clip costs 32000 bytes

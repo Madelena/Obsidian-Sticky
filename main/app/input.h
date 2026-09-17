@@ -3,7 +3,8 @@
 // =============================================================================
 // Turns the three physical buttons into queued events. Callbacks only post;
 // the pipeline task in pipeline.cpp drains the queue and does the work. The
-// touch panel in board/touch.cpp posts its swipes into the same queue.
+// touch panel in board/touch.cpp posts its swipes, on both axes, into the
+// same queue.
 #pragma once
 
 #include <cstdint>
@@ -17,12 +18,15 @@ enum class Event : uint8_t {
     None,
     AiDown,     // AI button pressed: start recording, or stop a latched one
     AiUp,       // AI button released: stop recording unless the press latched
-    UpClick,    // Up button: scroll back, or show the info screen
+    UpClick,    // Up button: scroll back, then step to a newer note or the info
+    UpDouble,   // Up button tapped twice: jump straight back to the current note
     UpHeld,     // Up button held 3 s: power off, or cancel a latched recording
-    DownClick,  // Down button: scroll on, or retry the failed stage
+    DownClick,  // Down button: retry a failed stage, else scroll on then step older
     DownHeld,   // Down button held 3 s: enter setup mode
     SwipeUp,    // Finger swiped up the panel: show the next screen of the note
     SwipeDown,  // Finger swiped down the panel: show the previous screen
+    SwipeLeft,  // Finger swiped left: bring the next older note in from the right
+    SwipeRight, // Finger swiped right: bring the newer note, or the info, in
 };
 
 // INPUT INITIALIZER

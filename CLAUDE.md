@@ -31,12 +31,12 @@ environments. Do not edit `sdkconfig`; change `sdkconfig.defaults`, delete
 | --- | --- |
 | `main/main.cpp` | `app_main` boot order only. No logic. |
 | `main/pin_config.h` | Every GPIO number and I2C address on the board. |
-| `main/app/` | `settings` (NVS + JSON), `input` (button events to a queue), `power` (idle timer, deep sleep), `pipeline` (the state machine and the only place stages are sequenced). |
+| `main/app/` | `settings` (NVS + JSON), `history` (the saved-note ring in its own `notes` partition), `input` (button events to a queue), `power` (idle timer, deep sleep), `pipeline` (the state machine and the only place stages are sequenced). |
 | `main/audio/` | `pdm_mic` (I2S PDM RX, mic power) and `clip` (the single PSRAM sample buffer and its WAV header). |
-| `main/board/` | `board` (power latch, shared buses, safe pin states), `battery` (BQ27220), `buzzer` (LEDC), `touch` (GT911 swipes, powered only while a note scrolls). |
+| `main/board/` | `board` (power latch, shared buses, safe pin states), `battery` (BQ27220), `buzzer` (LEDC), `touch` (GT911 swipes on both axes, powered only while one could act). |
 | `main/net/` | `wifi` (STA, SoftAP, SNTP), `http` (esp_http_client wrapper and the streamed multipart WAV upload), `stt_client`, `llm_client`, `obsidian_client`. |
 | `main/portal/` | `portal` (esp_http_server routes) and the embedded `index.html` settings page. |
-| `main/ui/` | `canvas` (1-bit 800x480 framebuffer), `display` (SSD1677 bring-up, rotation, refresh policy), `screen` (layout), `icons` and `icons_data` (status band pictograms), `text` (UTF-8 decode, wrap, ASCII folding), `font` and `fonts/` (baked ASCII bitmaps), `cjk_font` (draw-time TrueType from the `font` flash partition, for everything above U+007F). |
+| `main/ui/` | `canvas` (1-bit 800x480 framebuffer), `display` (SSD1677 bring-up, rotation, refresh policy), `screen` (layout), `icons` and `icons_data` (status band pictograms), `text` (UTF-8 decode, truncate, wrap, ASCII folding), `datetime` (relative date wording for the status band), `font` and `fonts/` (baked ASCII bitmaps), `cjk_font` (draw-time TrueType from the `font` flash partition, for everything above U+007F). |
 | `components/seeed_epaper/` | Vendored SSD1677 and UC8179 panel driver. |
 | `components/bq27220/` | Vendored fuel gauge driver. |
 | `components/button/` | Vendored `espressif/button` 4.1.6 with a local ISR patch. See its `LOCAL_PATCHES.md`. |
@@ -51,6 +51,10 @@ environments. Do not edit `sdkconfig`; change `sdkconfig.defaults`, delete
 - Every new `.cpp` under `main/` must be added to the `SRCS` list in
   `main/CMakeLists.txt`. A file missing from `SRCS` links cleanly and silently
   does nothing.
+- Line endings are per file and mixed: `main/app/input.*`, `main/ui/display.*`,
+  `main/audio/clip.*`, `main/net/http.*` and most of `docs/` are CRLF, the rest
+  is LF. An edit that rewrites a file wholesale silently converts them, so
+  match the file you are in and re-check before committing.
 - Never refresh the display or touch I2C from a button callback. Callbacks run
   in the button component's timer context. Post an `input::Event` and let the
   pipeline task do the work.

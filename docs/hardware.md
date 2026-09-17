@@ -340,6 +340,29 @@ table, so regenerating a face at a different size cannot leave the layout
 quietly wrong. It costs one pass over about 40 bytes, up to four times per
 layout under `auto`.
 
+### One constant is both the click delay and the double-tap window
+
+`short_press_ticks` in `components/button/iot_button.c` does two jobs, and
+finding that decided how the double tap on Up is bound.
+
+- **A single click already waits it out.** On release the state machine goes to
+  `PRESS_REPEAT_DOWN_CHECK` unconditionally, and `BUTTON_SINGLE_CLICK` only
+  fires there once `ticks > short_press_ticks`. It never branches on which
+  callbacks are registered, so subscribing `BUTTON_DOUBLE_CLICK` costs the
+  single click exactly nothing. That is what made the binding free.
+- **The same number is the gap allowed between the two presses**, and 180 ms is
+  under the 200 to 500 ms a human double tap actually takes. Up alone is set to
+  250 ms in `main/app/input.cpp`; Down stays at 180. The price is 120 ms more
+  before an Up scroll, against a partial refresh of 880 ms.
+- **A second press longer than the window emits nothing at all.** The first
+  click was already suppressed, and a press held past `short_press_ticks` from
+  the repeat state falls through to `PRESS_END` with neither a single nor a
+  double. A sloppy double tap simply does nothing, and the next press is an
+  ordinary single click. Widening the window shrinks this hole as well.
+- **A long press is unreachable on a second press.** That state tests only for
+  release, with no long-press branch, so "tap Up, then hold Up 3 s" never
+  powers off. Wait for the tap to resolve first.
+
 ### The GT911 reports no configuration, so it never reports a touch
 
 The one unit tested answers I2C perfectly and never produces a coordinate,

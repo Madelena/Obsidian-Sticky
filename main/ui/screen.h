@@ -1,11 +1,12 @@
 // =============================================================================
 // SCREEN
 // =============================================================================
-// The one screen this device has: the last note, an optional caption, and a
-// status band along the foot. pipeline.cpp drives it; it owns the layout, the
-// note scrolling, and decides partial versus full refresh via display.cpp.
+// The note page: one note, an optional caption, and a status band along the
+// foot. pipeline.cpp chooses which note; this owns the layout, the scrolling,
+// and the choice of partial versus full refresh via display.cpp.
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -14,10 +15,17 @@
 namespace screen {
 
 // NOTE SETTER
-// Stores the note text (UTF-8) shown in the body and rewinds to the top, or
-// to the last screenful when tail is set, which is what a transcript still
-// being written wants: the words that just arrived are at the end.
+// Stores the note text (UTF-8) shown in the body, rewinds to the top, or to
+// the last screenful when tail is set, which is what a transcript still being
+// written wants, and clears the note time so a caller that forgets to set one
+// gets no date rather than the wrong date.
 void set_note(const std::string &note, bool tail = false);
+
+// NOTE TIME SETTER
+// Stores when the note was recorded, as Unix time, which the status band
+// shows as "Today at 9:05" whenever it has no status word. 0 means unknown and
+// draws nothing. Set it after set_note(), which resets it.
+void set_note_time(int64_t when);
 
 // CAPTION SETTER
 // Stores the line shown above the status band, such as an error reason; an
@@ -64,6 +72,16 @@ bool scrollable();
 // Moves the note body by delta screens, one line of overlap each way, and
 // redraws with the last status; returns false when the move is impossible.
 bool scroll(int delta);
+
+// SCROLL POSITION REPORTER
+// Returns the topmost wrapped line on screen, for a caller that means to come
+// back to it. Only meaningful after a paint, which is what measures the wrap.
+int first_line();
+
+// SCROLL POSITION SETTER
+// Puts the topmost line back where first_line() found it, without painting.
+// A line past the end of the note now showing is clamped at the next paint.
+void scroll_to(int line);
 
 // One labelled fact on the info screen, drawn as a row of its table.
 struct InfoRow {

@@ -53,7 +53,14 @@ merged image; without it the image is the same as before and non-Latin
 characters fall back to ASCII.
 
 The merged image is about 13.7 MB, most of which is the 5.6 MB font partition
-plus the padding between partition offsets.
+plus the padding between partition offsets. The `notes` partition at 0x1010000
+adds nothing to it: it ships empty and the image ends at the font.
+
+**Flashing only `build\obsidian_sticky.bin` at 0x10000 onto a device that
+predates the `notes` partition leaves the note history disabled.** The app
+boots, records and saves exactly as before, and the log line at startup says
+`No notes partition (ESP_ERR_NOT_FOUND), history disabled`. The fix is to write
+the partition table too, which `idf.py flash` and the merged image both do.
 
 Flash it with:
 

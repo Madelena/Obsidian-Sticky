@@ -172,15 +172,17 @@ The discipline in `main/ui/display.cpp`:
 
 The idle branch of the `pipeline` event loop holds a single consolidated
 comparison, and it is the only thing that repaints a resting device. It tracks
-five things at once:
+seven things at once:
 
 - Wi-Fi link state
 - radio-off state, after the Wi-Fi idle timeout stopped the station
 - the battery percentage bucketed by `icons::battery_step()`
 - charge direction
 - USB presence
+- whether the wall clock has synced
+- the save receipt falling due, one minute after a note was saved
 
-If any differs from what is on screen, one `screen::redraw()` runs. The point
+If any differs from what is on screen, one partial refresh runs. The point
 is that the battery reading and the Wi-Fi indicator cannot each decide to
 paint the panel on their own: a full refresh costs about a second, and two
 owners means two of them. That bucket is the same one the gauge icon draws
@@ -189,6 +191,85 @@ bounds how often an idle device paints at all. It went from twenty 5 percent
 buckets to the icon's own steps when the bar stopped showing a number, which
 is seven repaints over a full discharge rather than twenty. The trackers keep moving while the info screen is
 up, so dismissing it does not trigger a second repaint.
+
+The clock is tracked apart from the Wi-Fi link because it lands seconds later.
+A cold boot restores and draws the newest note before SNTP answers, and the
+date is worked out at draw time, so without its own tracker the band stays
+blank until something unrelated happened to repaint it. A wake from deep sleep
+does not have the problem, because the RTC kept the time.
+
+The receipt is the one tracker that is a deadline rather than a comparison, so
+it needs two things the others do not. It is cleared whether or not it draws,
+or a receipt that came due behind the info screen would fire again on the way
+out; and it calls `screen::show("")` rather than `screen::redraw()`, because
+the point is to *change* the status word to empty, which is what lets the band
+fall through to the note's own date. It is measured on `esp_timer_get_time()`
+rather than the wall clock, so an SNTP step cannot fire it early or never.
+
+## Note history
+
+`main/app/history.cpp` keeps the last N saved notes in a **separate `notes` NVS
+partition**, 512 KB at `0x1010000`. It is separate because the `nvs` partition
+is 24 KB shared with every setting: about three notes would fit there, and they
+would starve the settings out of it. The new row is appended after `font`, so
+nothing existing moves and an upgrade keeps its Wi-Fi credentials.
+
+Entries are **blobs, not strings**. `nvs_set_str` caps near 4 KB, which is
+where the old 3900-byte `last_note` truncation came from; `nvs_set_blob` chunks
+across pages and has no such cap, so the per-note ceiling is 8192 bytes and a
+ten minute recording survives a reboot whole. Each blob is an 8-byte
+little-endian `int64` recording time followed by the UTF-8 text.
+
+The ring is keyed by a **sequence number that is never reused**: `seq` is the
+next to write, `oldest` the lowest still kept, and the count is their
+difference. A `history_max` lowered from the portal is therefore just a
+different prune point, with no re-keying and no index to rewrite.
+
+Three behaviours are deliberate:
+
+- **`ESP_ERR_NOT_FOUND`** means a device still carrying the four-row partition
+  table, which is what flashing only `app.bin` over an older release leaves
+  behind. History reports unavailable, every call is a no-op, and the device
+  records and saves exactly as it did before. It must never fall back to
+  `sticky/last_note`, which would reintroduce the 4 KB cap.
+- **The erase-and-retry** on a corrupt partition is safe here in a way the one
+  in `main.cpp` is not: this partition holds nothing but notes, where
+  `nvs_flash_erase()` takes the Wi-Fi credentials with it.
+- **Migration** folds a pre-history `last_note` into sequence 0 at timestamp 0
+  and erases the key, so upgrading does not drop the note off the screen.
+
+### The current note is not indexed into the ring
+
+This is the subtlest thing in the feature. `pipeline.cpp` holds `s_view` (-1
+info, 0 the current note, N the Nth older) and `s_home_seq`, the sequence the
+current note came from. `s_home_seq` is `kNoSeq` whenever what is on screen
+never reached the ring: **a failed save** leaves the transcript on the screen
+and out of it, and `POST /api/show` does the same. One expression covers both:
+
+```
+seq_for(N) = (s_home_seq valid ? s_home_seq : newest_seq() + 1) - N
+```
+
+With a valid `s_home_seq`, step 1 is the second-newest, so there is no
+duplicate. Without one, step 1 is the newest entry, so there is no gap, and the
+unsaved text correctly sits one slot newer than everything stored. The
+subtraction underflows to `kNoSeq` past the start, which every reader rejects.
+
+### Where a recording leaves you
+
+Starting a recording does not touch `s_view`. The view returns to the current
+note exactly when the recording produces something that note has to hold: at
+`s_pending_text = joined` once there is speech, and in `fail()`, which between
+them cover the save that works and the save that does not. The three endings
+that produce nothing, no speech, a cancel and a fumble, leave `s_view` alone
+and put the reader back through `load_view()`, scroll line included. That line
+is captured at the top of `record_and_process()`, because the live transcript
+preview calls `screen::set_note()` and that rewinds to the top.
+
+`load_view()` sets the note, the date and the line without painting, and
+returns the status word the restored view wears, so one paint carries all four.
+It folds the info screen into the current note, because a caller with something
+to report, "No speech detected", needs a status band to report it in.
 
 ## Settings
 
@@ -209,9 +290,17 @@ read everywhere through a mutex-guarded copy.
 ## The touch panel is powered on demand
 
 `sync_touch()` runs once per pass of the pipeline event loop and asks for one
-thing: is a note that overflows the screen showing on the screen that
-scrolls. Nothing else decides, the same way one check owns every idle
-repaint.
+thing: could a gesture do anything right now. That is either a note that
+overflows the screen, which a vertical swipe scrolls, or somewhere to step to,
+which a horizontal swipe reaches. Nothing else decides, the same way one check
+owns every idle repaint.
+
+The second half of that question is new with the note history, and it widens
+the answer considerably: with any history stored there is nearly always
+somewhere to step, so the panel is powered for most of the awake window rather
+than only during a long note. That is the cost of the rule in `design.md` that
+an input which can act should be listening, and it is bounded by the idle sleep
+timer.
 
 - **Powering it costs about 120 ms**, spent on the touch task, and only on a
   transition. The loop calls `set_enabled()` every second with the same

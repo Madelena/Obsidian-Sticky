@@ -10,6 +10,7 @@
 #include "cJSON.h"
 #include "esp_log.h"
 #include "nvs.h"
+#include "ui/text.h"
 
 namespace settings {
 namespace {
@@ -101,16 +102,9 @@ std::string clean_name(const std::string &name)
     if (first == last) {
         return kProductName;
     }
-    size_t cut = last - first;
-    if (cut > kMaxLength) {
-        cut = kMaxLength;
-        // The cap counts bytes, so it can land inside a multi-byte character.
-        // Step back off any continuation byte rather than store half a glyph.
-        while (cut > 0 && (static_cast<unsigned char>(name[first + cut]) & 0xC0) == 0x80) {
-            --cut;
-        }
-    }
-    return name.substr(first, cut);
+    // The cap counts bytes, so truncate_utf8 keeps it off a continuation byte
+    // rather than storing half a glyph.
+    return text::truncate_utf8(name.substr(first, last - first), kMaxLength);
 }
 
 // Reads one NVS string into dest, leaving dest alone when the key is absent.
@@ -154,8 +148,12 @@ esp_err_t init()
         flag = 1;
         load_int(handle, "beep", flag);
         loaded.beep = flag != 0;
+        flag = 0;
+        load_int(handle, "hour12", flag);
+        loaded.hour12 = flag != 0;
         load_int(handle, "sleep_min", loaded.sleep_min);
         load_int(handle, "wifi_idle_min", loaded.wifi_idle_min);
+        load_int(handle, "history_max", loaded.history_max);
         nvs_close(handle);
     } else if (err != ESP_ERR_NVS_NOT_FOUND) {
         return err;
@@ -172,6 +170,14 @@ esp_err_t init()
     // a device lands here and visibly changes its face from Atkinson to Inter.
     if (!known_font(loaded.text_font)) {
         loaded.text_font = "inter";
+    }
+    // A count another firmware wrote has no partition sized for it here, and
+    // the floor is 1 rather than 0 because the newest note has always survived
+    // a reboot and no setting should be able to switch that off.
+    if (loaded.history_max < 1) {
+        loaded.history_max = 1;
+    } else if (loaded.history_max > kHistoryMax) {
+        loaded.history_max = kHistoryMax;
     }
     std::lock_guard<std::mutex> lock(s_mutex);
     s_values = loaded;
@@ -206,10 +212,16 @@ esp_err_t save(const Values &values)
         err = nvs_set_i32(handle, "beep", values.beep ? 1 : 0);
     }
     if (err == ESP_OK) {
+        err = nvs_set_i32(handle, "hour12", values.hour12 ? 1 : 0);
+    }
+    if (err == ESP_OK) {
         err = nvs_set_i32(handle, "sleep_min", values.sleep_min);
     }
     if (err == ESP_OK) {
         err = nvs_set_i32(handle, "wifi_idle_min", values.wifi_idle_min);
+    }
+    if (err == ESP_OK) {
+        err = nvs_set_i32(handle, "history_max", values.history_max);
     }
     if (err == ESP_OK) {
         err = nvs_commit(handle);
@@ -237,8 +249,10 @@ std::string to_json()
     }
     cJSON_AddBoolToObject(root, "llm_on", v.llm_on);
     cJSON_AddBoolToObject(root, "beep", v.beep);
+    cJSON_AddBoolToObject(root, "hour12", v.hour12);
     cJSON_AddNumberToObject(root, "sleep_min", v.sleep_min);
     cJSON_AddNumberToObject(root, "wifi_idle_min", v.wifi_idle_min);
+    cJSON_AddNumberToObject(root, "history_max", v.history_max);
     char *printed = cJSON_PrintUnformatted(root);
     std::string out = printed != nullptr ? printed : "{}";
     cJSON_free(printed);
@@ -275,6 +289,14 @@ bool apply_json(const char *json, std::string &error)
     if (cJSON_IsBool(beep)) {
         v.beep = cJSON_IsTrue(beep);
     }
+    const cJSON *hour12 = cJSON_GetObjectItem(root, "hour12");
+    if (cJSON_IsBool(hour12)) {
+        v.hour12 = cJSON_IsTrue(hour12);
+    }
+    const cJSON *history_max = cJSON_GetObjectItem(root, "history_max");
+    if (cJSON_IsNumber(history_max)) {
+        v.history_max = history_max->valueint;
+    }
     const cJSON *sleep_min = cJSON_GetObjectItem(root, "sleep_min");
     if (cJSON_IsNumber(sleep_min)) {
         v.sleep_min = sleep_min->valueint < 0 ? 0 : sleep_min->valueint;
@@ -293,6 +315,12 @@ bool apply_json(const char *json, std::string &error)
     if (v.text_size != "auto" && v.text_size != "small" && v.text_size != "medium" &&
         v.text_size != "large" && v.text_size != "xlarge") {
         error = "text_size must be auto, small, medium, large or xlarge";
+        return false;
+    }
+    // Rejected rather than clamped, unlike init(): a person is reading this
+    // reply and can be told, where a stored value has nobody to tell.
+    if (v.history_max < 1 || v.history_max > kHistoryMax) {
+        error = "history_max must be 1 to " + std::to_string(kHistoryMax);
         return false;
     }
     if (!known_font(v.text_font)) {

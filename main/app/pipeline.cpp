@@ -15,6 +15,7 @@
 #include <string>
 #include <vector>
 
+#include "app/history.h"
 #include "app/input.h"
 #include "app/power.h"
 #include "app/settings.h"
@@ -35,8 +36,8 @@
 #include "net/obsidian_client.h"
 #include "net/stt_client.h"
 #include "net/wifi.h"
-#include "nvs.h"
 #include "portal/portal.h"
+#include "ui/datetime.h"
 #include "ui/display.h"
 #include "ui/icons.h"
 #include "ui/screen.h"
@@ -138,10 +139,10 @@ std::atomic<bool> s_upload_stop{true};
 std::atomic<bool> s_uploader_idle{true};
 
 constexpr const char *kSetupSsid = "Sticky-Setup";
-constexpr const char *kNvsNamespace = "sticky";
-constexpr const char *kNvsNoteKey = "last_note";
-constexpr size_t kNvsNoteBytes = 3900;  // nvs_set_str caps a string near 4 KB
 constexpr uint32_t kBatteryPollSeconds = 60;
+// How long the "Saved ..." receipt holds the status band before it settles to
+// the note's own date. Both say the same time; only the first says it worked.
+constexpr int64_t kReceiptUs = 60 * 1000 * 1000;
 
 enum class Stage { None, Transcribe, Save };
 
@@ -155,7 +156,23 @@ std::atomic<bool> s_capture_done{true};
 std::atomic<bool> s_capture_gate{false};
 bool s_setup_mode = false;
 bool s_radio_off = false;
-bool s_info_showing = false;
+// Where in the strip the screen is: -1 the info screen, 0 the current note,
+// N>0 the Nth older entry. The one place -1 is understood is move_view().
+int s_view = 0;
+// The ring sequence the current note came from, or kNoSeq when what is on
+// screen never reached the ring: a save that failed, or POST /api/show.
+uint32_t s_home_seq = history::kNoSeq;
+// When the note on Home was recorded, kept beside s_shown_note so restoring
+// one restores the other.
+int64_t s_shown_time = 0;
+// Scroll line to come back to when a recording produces nothing.
+int s_view_line = 0;
+// Wall clock when the recording being processed started, carried through a
+// retry so the entry is dated when it was said, not when it finally saved.
+int64_t s_pending_time = 0;
+// esp_timer deadline for the receipt above, 0 when none is pending. Monotonic
+// rather than wall clock, so an SNTP step cannot fire it early or never.
+int64_t s_receipt_until_us = 0;
 
 // Buckets the charge the way the gauge icon does, so the panel repaints on a
 // change the user can see rather than on every percent. A full refresh costs
@@ -166,58 +183,6 @@ int battery_step()
     return icons::battery_step(battery::percent());
 }
 
-
-// Formats the wall clock as HH:MM, or a placeholder before SNTP.
-std::string clock_text()
-{
-    if (!wifi::time_synced()) {
-        return "--:--";
-    }
-    const time_t now = time(nullptr);
-    struct tm local = {};
-    localtime_r(&now, &local);
-    char text[8];
-    std::strftime(text, sizeof(text), "%H:%M", &local);
-    return text;
-}
-
-// Loads the last saved note from NVS so it survives reboots.
-std::string load_last_note()
-{
-    nvs_handle_t handle = 0;
-    if (nvs_open(kNvsNamespace, NVS_READONLY, &handle) != ESP_OK) {
-        return "";
-    }
-    size_t length = 0;
-    std::string note;
-    if (nvs_get_str(handle, kNvsNoteKey, nullptr, &length) == ESP_OK && length > 1) {
-        note.resize(length);
-        nvs_get_str(handle, kNvsNoteKey, note.data(), &length);
-        note.resize(length - 1);
-    }
-    nvs_close(handle);
-    return note;
-}
-
-// Stores the last saved note; NVS strings cap near 4 KB so long notes are cut.
-void store_last_note(const std::string &note)
-{
-    nvs_handle_t handle = 0;
-    if (nvs_open(kNvsNamespace, NVS_READWRITE, &handle) != ESP_OK) {
-        return;
-    }
-    // Back off the cut to a code point boundary, or the reloaded note ends in
-    // a stray U+FFFD from next_code_point() in ui/text.cpp. Three bytes per
-    // CJK glyph means a note in Chinese reaches this long before one in
-    // English does.
-    size_t cut = note.size() < kNvsNoteBytes ? note.size() : kNvsNoteBytes;
-    while (cut > 0 && (static_cast<unsigned char>(note[cut]) & 0xC0) == 0x80) {
-        --cut;
-    }
-    nvs_set_str(handle, kNvsNoteKey, note.substr(0, cut).c_str());
-    nvs_commit(handle);
-    nvs_close(handle);
-}
 
 // Capture task: copies mic samples into the clip until told to stop.
 void capture_task(void *)
@@ -471,10 +436,135 @@ bool has_speech(const std::string &text)
     return false;
 }
 
+void show_info();
+
+// The word Home wears in the status band. A failure leaves text on Home that
+// wants a Down, and that survives a trip through the history and back.
+const char *home_status()
+{
+    return s_retry_stage == Stage::None ? "" : "Retry with Down";
+}
+
+// Loads the current note into the screen without painting.
+void load_home(bool tail)
+{
+    screen::set_note(s_shown_note, tail);
+    screen::set_note_time(s_shown_time);
+}
+
+// Draws the current note, whatever the screen was showing before.
+void show_home(bool full, bool tail = false)
+{
+    s_view = 0;
+    load_home(tail);
+    screen::show(home_status(), -1, full);
+}
+
+// The ring sequence N steps older than the current note. Home is not indexed
+// into the ring, because what it holds may never have reached one: a failed
+// save leaves the transcript on screen and out of the ring, and that text is
+// genuinely newer than every entry, so it sits one step ahead of the newest.
+uint32_t seq_for(int steps)
+{
+    const uint32_t newest = history::newest_seq();
+    const uint32_t base = s_home_seq != history::kNoSeq ? s_home_seq
+                          : newest != history::kNoSeq   ? newest + 1
+                                                        : 0;
+    // Underflows to kNoSeq past the start, which every reader rejects.
+    return base - static_cast<uint32_t>(steps);
+}
+
+// Loads the Nth older note into the screen without painting.
+bool load_entry(int steps, bool tail)
+{
+    history::Entry entry;
+    if (!history::get(seq_for(steps), entry)) {
+        return false;
+    }
+    screen::set_note(entry.text, tail);
+    screen::set_note_time(entry.when);
+    return true;
+}
+
+// Whether anything sits one step older than the screen, which together with
+// s_view is what decides the touch panel is worth powering on a short note.
+bool can_move_view()
+{
+    const uint32_t oldest = history::oldest_seq();
+    if (oldest == history::kNoSeq) {
+        return s_view != 0;
+    }
+    const uint32_t seq = seq_for(s_view + 1);
+    return s_view != 0 || (seq >= oldest && seq <= history::newest_seq());
+}
+
+// Moves one slot along the strip: info, then the current note, then older
+// ones. Returns false at either end, which is what leaves the screen alone.
+bool move_view(int delta)
+{
+    const int target = s_view + delta;
+    if (target < -1) {
+        return false;
+    }
+    // Moving newer lands at the foot of the note arrived at, because that is
+    // where the reader left off when they went the other way.
+    const bool tail = delta < 0;
+    // Loaded before anything is retired, so a step off the end changes nothing.
+    if (target > 0 && !load_entry(target, tail)) {
+        return false;
+    }
+    // Past every guard, so the move is happening. The receipt is about the
+    // note it was saved on, and stepping off that note retires it.
+    s_receipt_until_us = 0;
+    if (target == -1) {
+        show_info();
+        return true;
+    }
+    if (target == 0) {
+        show_home(false, tail);
+        return true;
+    }
+    s_view = target;
+    screen::show("", -1, false);
+    return true;
+}
+
+// Loads back what the screen held before a recording replaced it, scroll line
+// included, without painting, and returns the status word that view wears so
+// one paint can carry both. The info screen has no status band, so a caller
+// with something to report lands on the note page instead.
+const char *load_view()
+{
+    if (s_view > 0 && load_entry(s_view, false)) {
+        screen::scroll_to(s_view_line);
+        return "";
+    }
+    // The info screen, or an entry pruned while the recording ran.
+    s_view = 0;
+    load_home(false);
+    screen::scroll_to(s_view_line);
+    return home_status();
+}
+
+// Redraws what the screen held before a recording replaced it, for an ending
+// with nothing to report at all. The info screen comes back as itself.
+void restore_view(bool full)
+{
+    if (s_view == -1) {
+        show_info();
+        return;
+    }
+    screen::show(load_view(), -1, full);
+}
+
 // Shows a stage failure and remembers where to resume on Down.
 void fail(Stage stage, const char *title, const std::string &reason)
 {
     s_retry_stage = stage;
+    // A failure puts something on Home that wants attention, so it pulls the
+    // view back from wherever in the history the reader was.
+    s_view = 0;
+    s_receipt_until_us = 0;
     screen::set_caption(reason + "  Press Down to retry.");
     screen::show(title, -1, true);
     buzzer::cue_error();
@@ -557,13 +647,19 @@ void process(Stage from)
             wifi::set_low_latency(false);
             s_retry_stage = Stage::None;
             screen::set_caption("");
-            // Nothing was said, so nothing replaces what was already there.
-            screen::set_note(s_shown_note);
+            // Nothing was said, so nothing replaces what was already there:
+            // the reader goes back to the note and the line they were on, and
+            // the status word rides the same paint.
+            load_view();
             screen::show("No speech detected", -1, true);
             buzzer::cue_error();
             ESP_LOGI(kTag, "Empty transcript, nothing saved");
             return;
         }
+        // From here there is a transcript, and Home is what holds it whether
+        // the save works or not, so the view comes back from the history.
+        s_view = 0;
+        s_home_seq = history::kNoSeq;
         s_pending_text = joined;
 
         if (s.llm_on) {
@@ -592,11 +688,21 @@ void process(Stage from)
 
     s_retry_stage = Stage::None;
     s_shown_note = s_pending_text;
+    s_shown_time = s_pending_time;
+    s_view = 0;
     screen::set_note(s_pending_text);
+    screen::set_note_time(s_pending_time);
     screen::set_caption(note_caption);
-    screen::show("Saved " + clock_text(), -1, true);
+    // "Saved today at 9:05" says both that it worked and when it was said.
+    // A minute later the idle check drops the first word, leaving the date
+    // the band carries for every note.
+    const std::string stamp = datetime::relative(s_pending_time, false);
+    screen::show(stamp.empty() ? "Saved" : "Saved " + stamp, -1, true);
+    s_receipt_until_us = esp_timer_get_time() + kReceiptUs;
     buzzer::cue_saved();
-    store_last_note(s_pending_text);
+    // After the receipt and the cue: an 8 KB commit is several sectors of
+    // flash write, and the user should already have seen and heard the save.
+    s_home_seq = history::append(s_pending_text, s_pending_time);
 }
 
 // How the record loop ended. Only Cancelled throws the audio away; the other
@@ -697,6 +803,14 @@ Stop record_loop(bool allow_latch, int64_t started_us)
 void record_and_process(bool allow_latch)
 {
     const int64_t started_us = esp_timer_get_time();
+    // Where the reader was, so an ending that produces nothing can put them
+    // back. The view itself is left alone: only a transcript moves it.
+    s_view_line = screen::first_line();
+    s_receipt_until_us = 0;
+    // Dated when it was said rather than when it saved, and captured here
+    // because a retry runs process() again minutes later. An unsynced clock
+    // stays 0 and is resolved at save time from the monotonic timer instead.
+    s_pending_time = wifi::time_synced() ? static_cast<int64_t>(time(nullptr)) : 0;
     power::note_activity();
     clip::reset();
     s_record_note.clear();
@@ -792,16 +906,20 @@ void record_and_process(bool allow_latch)
         wifi::set_low_latency(false);
         http::drop_warm();
         // Put back whatever the body held before the live transcript replaced
-        // it, so abandoning a recording does not also take the last note off
-        // the screen.
-        screen::set_note(s_shown_note);
-        // Every other ending draws the note full, which clears the ghosting a
-        // recording's partials left behind. This one has no note to draw, so
-        // a cancel asks for the full refresh itself. A fumble does not: it is
-        // over in a third of a second and has nothing to clear.
-        screen::show_ready(stop == Stop::Cancelled);
+        // it, so abandoning a recording does not also take the note being read
+        // off the screen. Every other ending draws the note full, which clears
+        // the ghosting a recording's partials left behind; a cancel asks for
+        // that itself. A fumble does not: it is over in a third of a second
+        // and has nothing to clear.
+        restore_view(stop == Stop::Cancelled);
         ESP_LOGI(kTag, "Discarded %lu ms", static_cast<unsigned long>(clip::duration_ms()));
         return;
+    }
+    // SNTP may have landed while the user was talking. The monotonic timer
+    // ran throughout, so the start time is exact rather than guessed.
+    if (s_pending_time == 0 && wifi::time_synced()) {
+        s_pending_time = static_cast<int64_t>(time(nullptr)) -
+                         (esp_timer_get_time() - started_us) / 1000000;
     }
     ESP_LOGI(kTag, "Recorded %lu ms", static_cast<unsigned long>(clip::duration_ms()));
     process(Stage::Transcribe);
@@ -834,7 +952,7 @@ void show_info()
         paragraphs.push_back("Visit http://" + wifi::hostname() + " for settings.");
     }
     screen::show_info(s.device_name, rows, paragraphs);
-    s_info_showing = true;
+    s_view = -1;
 }
 
 // Switches to SoftAP with the captive portal until reboot.
@@ -857,7 +975,7 @@ void enter_setup()
 // pass of the event loop, so it converges after anything that redraws.
 void sync_touch()
 {
-    touch::set_enabled(!s_setup_mode && !s_info_showing && screen::scrollable());
+    touch::set_enabled(!s_setup_mode && (screen::scrollable() || can_move_view()));
 }
 
 // Renders the sleep screen and enters deep sleep.
@@ -871,8 +989,15 @@ void go_to_sleep()
 // Task body: boot decisions, then the event loop.
 void run(void *)
 {
-    s_shown_note = load_last_note();
-    screen::set_note(s_shown_note);
+    // The newest entry is what a reboot comes back to, so the ring is the one
+    // source: the pre-history last_note was folded into it by history::init().
+    history::Entry newest;
+    if (history::get(history::newest_seq(), newest)) {
+        s_shown_note = newest.text;
+        s_shown_time = newest.when;
+        s_home_seq = newest.seq;
+    }
+    load_home(false);
     screen::set_caption("");
     power::note_activity();
     // Seed the cache before anything draws, or the first screen reports a
@@ -926,6 +1051,11 @@ void run(void *)
     bool shown_radio_off = s_radio_off;
     int shown_battery = battery_step();
     bool shown_charging = battery::charging();
+    // The clock is tracked separately from the link because it lands seconds
+    // later: a cold boot draws the restored note before SNTP answers, and the
+    // date is worked out at draw time, so without this it stays blank until
+    // something else happens to repaint.
+    bool shown_time_synced = wifi::time_synced();
     uint32_t seconds_since_poll = 0;
 
     while (true) {
@@ -956,33 +1086,54 @@ void run(void *)
                 seconds_since_poll = 0;
                 battery::poll();
             }
-            if (wifi::connected() != shown_link || s_radio_off != shown_radio_off ||
-                battery_step() != shown_battery || battery::charging() != shown_charging) {
+            const bool receipt_due =
+                s_receipt_until_us != 0 && esp_timer_get_time() >= s_receipt_until_us;
+            if (receipt_due || wifi::connected() != shown_link ||
+                s_radio_off != shown_radio_off || battery_step() != shown_battery ||
+                battery::charging() != shown_charging ||
+                wifi::time_synced() != shown_time_synced) {
                 shown_link = wifi::connected();
                 shown_radio_off = s_radio_off;
                 shown_battery = battery_step();
                 shown_charging = battery::charging();
+                shown_time_synced = wifi::time_synced();
+                // Cleared whether or not it is drawn, so a receipt that came
+                // due behind the info screen cannot fire again on the way out.
+                s_receipt_until_us = 0;
                 // Trackers still move while the info screen is up, so
                 // dismissing it does not trigger a second repaint.
-                if (!s_info_showing) {
-                    screen::redraw();
+                if (s_view >= 0) {
+                    // The receipt has to clear the status word, not just
+                    // repaint it, and an empty word is what lets the band
+                    // fall through to the note's date.
+                    if (receipt_due) {
+                        screen::show(home_status(), -1, false);
+                    } else {
+                        screen::redraw();
+                    }
                 }
             }
             continue;
         }
         power::note_activity();
         wake_radio();
-        // The info screen stays up until a button dismisses it, so the first
-        // press after it appears returns to the note instead of acting. A
-        // record press is the exception: it goes straight to recording.
-        if (s_info_showing) {
-            s_info_showing = false;
-            if (event != input::Event::AiDown) {
-                if (s_retry_stage == Stage::None) {
-                    screen::show_ready(true);
-                } else {
-                    screen::show("Retry with Down", -1, true);
-                }
+        // The info screen is the slot one step newer than the current note, so
+        // stepping older walks back to that note rather than any press
+        // dismissing it: Down, or a leftward swipe, which drags the note in
+        // from the right. A record press still goes straight to recording, and
+        // the holds still mean what they physically mean, wherever you are.
+        if (s_view == -1) {
+            switch (event) {
+            case input::Event::AiDown:
+            case input::Event::UpHeld:
+            case input::Event::DownHeld:
+                break;
+            case input::Event::DownClick:
+            case input::Event::SwipeLeft:
+            case input::Event::UpDouble:
+                show_home(true);
+                continue;
+            default:
                 continue;
             }
         }
@@ -992,14 +1143,22 @@ void run(void *)
                 record_and_process(true);
             }
             break;
-        // HOTFIX: Up and Down still scroll, which the touch panel was meant to
-        // take over. Remove both scroll calls here once a device is seen
-        // reporting a touch: every unit tested so far has a GT911 with no
-        // configuration loaded, and a swipe-only build cannot scroll at all on
-        // one. See docs/hardware.md, "The GT911 reports no configuration".
+        // Up and Down carry two jobs each, scrolling within a note and then
+        // stepping to the next one at the edge. That overload is deliberate
+        // and permanent: they are the only input on a device whose GT911 comes
+        // up with no configuration loaded, which is every unit tested so far.
+        // The glass has an axis to spare and keeps the two jobs apart.
         case input::Event::UpClick:
             if (!s_setup_mode && !screen::scroll(-1)) {
-                show_info();
+                move_view(-1);
+            }
+            break;
+        case input::Event::UpDouble:
+            // A silent no-op on the current note: nothing to say and no reason
+            // to spend a refresh saying it.
+            if (!s_setup_mode && s_view != 0) {
+                s_receipt_until_us = 0;
+                show_home(true);
             }
             break;
         case input::Event::UpHeld:
@@ -1015,11 +1174,15 @@ void run(void *)
             if (s_setup_mode) {
                 break;
             }
+            // Retry keeps Down outright while a failure stands. A failure
+            // always leaves the view on the current note, and reaching an
+            // older one with the buttons needs Down, so this is the same rule
+            // as "retry owns Down only there". The caption says so on screen.
             if (s_retry_stage != Stage::None) {
                 process(s_retry_stage);
                 power::note_activity();
-            } else {
-                screen::scroll(1);
+            } else if (!screen::scroll(1)) {
+                move_view(1);
             }
             break;
         case input::Event::DownHeld:
@@ -1029,12 +1192,26 @@ void run(void *)
             enter_setup();
             break;
         // The finger carries the text with it, so a swipe up shows what was
-        // below the last visible line.
+        // below the last visible line. Vertical never steps to another note:
+        // the horizontal axis means that, and one gesture with two meanings
+        // is what the buttons only put up with for want of an axis.
         case input::Event::SwipeUp:
             screen::scroll(1);
             break;
         case input::Event::SwipeDown:
             screen::scroll(-1);
+            break;
+        // The finger carries the notes with it too: dragging left brings the
+        // older note in from the right, the way a photo carousel moves.
+        case input::Event::SwipeLeft:
+            if (!s_setup_mode) {
+                move_view(1);
+            }
+            break;
+        case input::Event::SwipeRight:
+            if (!s_setup_mode) {
+                move_view(-1);
+            }
             break;
         case input::Event::AiUp:
         case input::Event::None:

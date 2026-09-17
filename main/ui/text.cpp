@@ -132,6 +132,21 @@ std::string prepare(const std::string &utf8)
 }
 
 
+std::string truncate_utf8(const std::string &utf8, size_t max)
+{
+    if (utf8.size() <= max) {
+        return utf8;
+    }
+    // Inspect the first byte *not* copied: while it is a continuation byte the
+    // cut lands mid-sequence, so step back until it starts a code point.
+    size_t cut = max;
+    while (cut > 0 && (static_cast<unsigned char>(utf8[cut]) & 0xC0) == 0x80) {
+        --cut;
+    }
+    return utf8.substr(0, cut);
+}
+
+
 std::vector<std::string> wrap(const Font &font, const std::string &prepared, int max_width)
 {
     std::vector<std::string> lines;

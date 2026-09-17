@@ -23,7 +23,8 @@ mis-hearings, and writes the result straight into your Obsidian vault through
 the Local REST API community plugin. The note lands as a timestamped line in
 today's daily note, or as a brand new note in a folder you choose. The e-ink
 screen shows the text it saved and stays readable with the power off, so the
-device works as a sticky note on your desk until you pick it up again.
+device works as a sticky note on your desk until you pick it up again. The last
+ten notes stay on the device, so you can page back through what you said.
 
 ## How to use it
 
@@ -32,9 +33,11 @@ device works as a sticky note on your desk until you pick it up again.
 | Hold the side (AI) button | Starts recording. The screen shows a level meter and the elapsed time. |
 | Release the side button | Stops recording and runs transcribe, optional cleanup, and save. |
 | Tap the side button | Latches the recording, so it keeps running with no hand on the button. A short blip confirms it. Tap again to stop and save, or tap again straight away to throw it out. Hold Up for 3 seconds to abandon a latched recording. |
-| Press Up | Scrolls back through a note too long to fit. At the top it shows the info screen instead: Wi-Fi network, IP address, battery, where notes are being saved, and the firmware version. It stays up until you press a button, which returns you to the note. |
-| Press Down | Scrolls on through a long note. After a failure it retries the failed stage instead: a failed transcribe retries only the part that failed, since the rest is already text, and a failed save retries from the text, so nothing has to be spoken again. |
+| Press Up | Scrolls back through a note too long to fit. With nothing further up it steps to the newer note, and from the current note it shows the info screen: Wi-Fi network, IP address, battery, where notes are being saved, and the firmware version. Press Down to come back. |
+| Press Down | Scrolls on through a long note. With nothing further down it steps to the next older note. After a failure it retries the failed stage instead: a failed transcribe retries only the part that failed, since the rest is already text, and a failed save retries from the text, so nothing has to be spoken again. |
+| Tap Up twice | Jumps straight back to the current note, from anywhere in the history. |
 | Swipe up or down on the screen | Also scrolls a long note, on a device whose touch controller reports touches. See the note below. |
+| Swipe left or right on the screen | Steps to the older or newer note, on a device whose touch controller reports touches. |
 | Hold Down for 3 seconds | Enters setup mode. The device stops its normal work, starts the "Sticky-Setup" Wi-Fi network, and shows the setup instructions. Holding Down again in setup mode restarts the device. |
 | Hold Up for 3 seconds | Powers off, leaving a "Powered off" page on the screen. Hold the side button to turn it back on. The side button cannot power off, because holding it is how you record. |
 
@@ -49,12 +52,26 @@ on by holding the same button; press it again once the screen says Ready.
 The status band tracks the work, and the note itself is drawn once, when it is
 safely in your vault, because every redraw of this screen costs a second or
 two. A note longer than the screen scrolls a screenful at a time, and the bar
-in the right margin shows where you are.
+in the right margin shows where you are. At rest the band carries the date the
+note was recorded, as "Today at 9:05", "Yesterday at 14:02", a weekday name
+within the week, or a date beyond it.
 
-Swipe scrolling is built but unproven. On every unit tested, the GT911 touch
+The last ten notes stay on the device, so Up and Down page back through them
+and the date tells you which one you are reading. They lie in one strip with
+the info screen at one end, and there is no list and no menu to get lost in:
+
+```
+info  <-  the current note  ->  older 1  ->  older 2  ->  ...
+```
+
+How many to keep is a setting, from 1 to 20. They live in their own flash
+partition and survive a power off, not just a sleep. Every note is in your
+vault regardless; this is only the copy the device keeps for reading.
+
+Swipe gestures are built but unproven. On every unit tested, the GT911 touch
 controller comes up with no configuration loaded and never reports a touch,
-so the buttons remain the way to scroll. `docs/hardware.md` records exactly
-what was measured and what was ruled out.
+so the buttons remain the way to scroll and to page between notes.
+`docs/hardware.md` records exactly what was measured and what was ruled out.
 
 After ten idle minutes the device goes into deep sleep and the screen keeps
 showing the last note. Press the side button to wake it. If you keep the

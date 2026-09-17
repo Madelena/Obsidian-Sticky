@@ -15,6 +15,13 @@ namespace {
 
 constexpr const char *kTag = "input";
 constexpr uint16_t kShortPressMs = 180;
+// Up alone gets a wider window, because this one constant is both the delay
+// before a single click fires and the gap allowed between the two presses of
+// a double click. At 180 ms most double taps miss, and a missed one opens the
+// info screen and then dismisses it: two full refreshes to end up where you
+// started. The cost is 120 ms more before an Up scroll, against a partial
+// refresh of 880 ms. See PRESS_REPEAT_DOWN_CHECK in components/button.
+constexpr uint16_t kUpShortPressMs = 250;
 // The AI button cannot carry a long press: holding it is how you record, and
 // record_loop() in pipeline.cpp reads the raw level rather than the queue so a
 // release lands even mid-refresh. Power off lives on Up instead, matching
@@ -42,12 +49,13 @@ esp_err_t on(button_handle_t handle, button_event_t button_event, Event event)
                                   reinterpret_cast<void *>(static_cast<uintptr_t>(event)));
 }
 
-// Creates an active-low GPIO button with its own long-press threshold.
-esp_err_t create(int gpio, uint16_t long_press_ms, button_handle_t *handle)
+// Creates an active-low GPIO button with its own press thresholds.
+esp_err_t create(int gpio, uint16_t long_press_ms, uint16_t short_press_ms,
+                 button_handle_t *handle)
 {
     button_config_t config = {};
     config.long_press_time = long_press_ms;
-    config.short_press_time = kShortPressMs;
+    config.short_press_time = short_press_ms;
     button_gpio_config_t pin = {};
     pin.gpio_num = gpio;
     pin.active_level = 0;
@@ -69,15 +77,18 @@ esp_err_t init()
         return ESP_ERR_NO_MEM;
     }
 
-    ESP_RETURN_ON_ERROR(create(PIN_POWER_BTN, kHoldMs, &s_ai), kTag, "ai button");
+    ESP_RETURN_ON_ERROR(create(PIN_POWER_BTN, kHoldMs, kShortPressMs, &s_ai), kTag, "ai button");
     ESP_RETURN_ON_ERROR(on(s_ai, BUTTON_PRESS_DOWN, Event::AiDown), kTag, "ai down");
     ESP_RETURN_ON_ERROR(on(s_ai, BUTTON_PRESS_UP, Event::AiUp), kTag, "ai up");
 
-    ESP_RETURN_ON_ERROR(create(PIN_BTN_UP, kHoldMs, &s_up), kTag, "up button");
+    ESP_RETURN_ON_ERROR(create(PIN_BTN_UP, kHoldMs, kUpShortPressMs, &s_up), kTag, "up button");
     ESP_RETURN_ON_ERROR(on(s_up, BUTTON_SINGLE_CLICK, Event::UpClick), kTag, "up click");
+    // Costs the single click nothing: it already waits out the same window
+    // before firing, whether or not anything is listening for a double.
+    ESP_RETURN_ON_ERROR(on(s_up, BUTTON_DOUBLE_CLICK, Event::UpDouble), kTag, "up double");
     ESP_RETURN_ON_ERROR(on(s_up, BUTTON_LONG_PRESS_START, Event::UpHeld), kTag, "up held");
 
-    ESP_RETURN_ON_ERROR(create(PIN_BTN_DOWN, kHoldMs, &s_down), kTag, "down button");
+    ESP_RETURN_ON_ERROR(create(PIN_BTN_DOWN, kHoldMs, kShortPressMs, &s_down), kTag, "down button");
     ESP_RETURN_ON_ERROR(on(s_down, BUTTON_SINGLE_CLICK, Event::DownClick), kTag, "down click");
     ESP_RETURN_ON_ERROR(on(s_down, BUTTON_LONG_PRESS_START, Event::DownHeld), kTag, "down held");
     return ESP_OK;

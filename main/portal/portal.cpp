@@ -6,6 +6,7 @@
 
 #include <string>
 
+#include "app/history.h"
 #include "app/settings.h"
 #include "board/buzzer.h"
 #include "cJSON.h"
@@ -21,6 +22,7 @@
 #include "net/llm_client.h"
 #include "net/obsidian_client.h"
 #include "net/stt_client.h"
+#include "net/wifi.h"
 #include "ui/font.h"
 #include "ui/screen.h"
 
@@ -104,6 +106,12 @@ esp_err_t handle_post_settings(httpd_req_t *req)
         const settings::Values saved = settings::get();
         buzzer::set_enabled(saved.beep);
         font::set_family(font::family_from_name(saved.text_font.c_str()));
+        history::set_capacity(saved.history_max);
+        // start_sntp() is the only place TZ reaches the C library, and it is
+        // idempotent, so re-calling it is what makes a zone change show now
+        // rather than at the next reboot. The status band names days of the
+        // week, so a stale zone is visible rather than an hour out.
+        wifi::start_sntp(saved.tz);
         // A text size or font change should show at once, but not over the
         // setup screen, which is a show_message screen with no note behind it.
         if (!s_captive) {

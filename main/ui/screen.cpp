@@ -15,6 +15,7 @@
 #include "esp_app_desc.h"
 #include "net/wifi.h"
 #include "ui/canvas.h"
+#include "ui/datetime.h"
 #include "ui/display.h"
 #include "ui/font.h"
 #include "ui/icons.h"
@@ -68,6 +69,7 @@ std::string s_status;
 bool s_asleep = false;
 int s_first_line = 0;    // Topmost wrapped line on screen
 bool s_pin_to_end = false;  // Jump to the last screenful at the next paint
+int64_t s_note_time = 0;    // When the note was recorded, 0 when unknown
 int s_total_lines = 0;
 int s_visible_lines = 1;
 bool s_radio_off = false;
@@ -201,10 +203,16 @@ void draw_status(int level)
     const int top = bar_top();
     const int mid = top + font::title().height / 2;
     canvas::fill_rect(0, top - kEdgeGap, canvas::kWidth, canvas::kHeight - top + kEdgeGap, false);
-    // An empty status is the resting case and draws nothing at all. Sleeping
-    // is a mark in the cluster below, not a word, so the left of the bar is
-    // free for whatever the status has to say.
-    canvas::draw_text(font::title(), kMargin, top, text::prepare(s_status).c_str());
+    // A status word owns the left of the bar, and the note's own date falls
+    // into that slot when there is no word, which is the resting case.
+    // Sleeping is a mark in the cluster below rather than a word, so it leaves
+    // the date showing. During a recording the meter owns the right of the bar
+    // and the date would be about the note being replaced, so it is left off.
+    std::string left = s_status;
+    if (left.empty() && level < 0) {
+        left = datetime::relative(s_note_time, true);
+    }
+    canvas::draw_text(font::title(), kMargin, top, text::prepare(left).c_str());
 
     if (level >= 0) {
         const int left = canvas::kWidth - kMargin - kMeterWidth;
@@ -384,6 +392,14 @@ void set_note(const std::string &note, bool tail)
     s_note = note;
     s_first_line = 0;
     s_pin_to_end = tail;
+    s_note_time = 0;
+}
+
+
+void set_note_time(int64_t when)
+{
+    std::lock_guard<std::mutex> lock(s_mutex);
+    s_note_time = when;
 }
 
 
@@ -443,6 +459,23 @@ bool scrollable()
 {
     std::lock_guard<std::mutex> lock(s_mutex);
     return max_first_line() > 0;
+}
+
+
+int first_line()
+{
+    std::lock_guard<std::mutex> lock(s_mutex);
+    return s_first_line;
+}
+
+
+void scroll_to(int line)
+{
+    std::lock_guard<std::mutex> lock(s_mutex);
+    // No upper clamp here: the line counts belong to whatever was painted
+    // last, and draw_note() re-clamps against the note it is about to wrap.
+    s_first_line = line < 0 ? 0 : line;
+    s_pin_to_end = false;
 }
 
 

@@ -1,9 +1,9 @@
 // =============================================================================
 // TEXT
 // =============================================================================
-// String preparation for the canvas: UTF-8 decoding, folding of anything the
-// fonts cannot draw, and word wrapping. Used by screen.cpp before anything
-// reaches the canvas.
+// UTF-8 decoding, truncation, folding of anything the fonts cannot draw, and
+// word wrapping. screen.cpp runs prepare() then wrap() before anything reaches
+// the canvas; anything with a byte budget uses truncate_utf8().
 #pragma once
 
 #include <cstddef>
@@ -27,6 +27,13 @@ uint32_t next_code_point(const char *utf8, size_t &pos);
 // UTF-8, and everything else folds to an ASCII approximation such as '-' for
 // an en dash or '?' for an unknown glyph.
 std::string prepare(const std::string &utf8);
+
+// UTF-8 TRUNCATOR
+// Returns the first max bytes of utf8, backed off to a code point boundary so
+// the result never ends in half a character. Callers with a byte budget want
+// this rather than substr: a cut through a multi-byte sequence reloads as a
+// stray U+FFFD from next_code_point().
+std::string truncate_utf8(const std::string &utf8, size_t max);
 
 // WORD WRAPPER
 // Splits prepared text into lines no wider than max_width pixels, breaking at

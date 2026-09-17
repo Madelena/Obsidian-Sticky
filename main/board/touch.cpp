@@ -45,15 +45,19 @@ constexpr uint32_t kPollMs = 30;
 constexpr uint32_t kSleepPollMs = 200;
 // A lost release report would otherwise leave a gesture open forever.
 constexpr uint32_t kReleaseTimeoutMs = 400;
-// A swipe must cross an eighth of the screen and be more vertical than
-// horizontal, so that picking the device up by the glass scrolls nothing.
+// A swipe must cross an eighth of the screen along its dominant axis, so that
+// picking the device up by the glass neither scrolls nor turns a page. The
+// threshold is per axis because the screen is 800 by 480: one number would
+// make a horizontal swipe too easy or a vertical one too hard.
 constexpr int kTravelDivisor = 8;
 constexpr int kMinTravelFloor = 40;
 
 // The panel driver in ui/display.cpp hands the glass a canvas rotated 180
-// degrees, so the controller's y grows towards the top of what is being read.
+// degrees, which inverts both axes: the controller's y grows towards the top
+// of what is being read and its x towards the left.
 // Unverified: no unit has yet reported a coordinate. See docs/hardware.md.
 constexpr bool kInvertY = true;
+constexpr bool kInvertX = true;
 
 std::atomic<bool> s_enabled{false};
 std::atomic<bool> s_failed{false};
@@ -62,8 +66,10 @@ TaskHandle_t s_task = nullptr;
 i2c_master_bus_handle_t s_bus = nullptr;
 i2c_master_dev_handle_t s_device = nullptr;
 uint8_t s_address = kAddrIntHigh;   // Last address that answered, tried first
+int s_max_x = 800;
 int s_max_y = 480;
-int s_min_travel = 480 / kTravelDivisor;
+int s_min_travel_x = 800 / kTravelDivisor;
+int s_min_travel_y = 480 / kTravelDivisor;
 
 bool s_tracking = false;
 uint16_t s_start_x = 0;
@@ -159,14 +165,20 @@ bool read_resolution()
     if (!read_registers(kRegResolution, raw, sizeof(raw))) {
         return false;
     }
+    const int max_x = raw[0] | (raw[1] << 8);
     const int max_y = raw[2] | (raw[3] << 8);
-    if (max_y <= 0) {
+    if (max_x <= 0 || max_y <= 0) {
         return false;
     }
+    s_max_x = max_x;
     s_max_y = max_y;
-    s_min_travel = s_max_y / kTravelDivisor;
-    if (s_min_travel < kMinTravelFloor) {
-        s_min_travel = kMinTravelFloor;
+    s_min_travel_x = s_max_x / kTravelDivisor;
+    if (s_min_travel_x < kMinTravelFloor) {
+        s_min_travel_x = kMinTravelFloor;
+    }
+    s_min_travel_y = s_max_y / kTravelDivisor;
+    if (s_min_travel_y < kMinTravelFloor) {
+        s_min_travel_y = kMinTravelFloor;
     }
     return true;
 }
@@ -242,29 +254,48 @@ bool start_controller()
     return false;
 }
 
-// Ends a touch, posting a swipe when it travelled far enough to be one.
+// Ends a touch, posting a swipe when it travelled far enough to be one. The
+// dominant axis decides which: the two mean different things, vertical
+// scrolling within a note and horizontal stepping between notes.
 void finish_gesture()
 {
     if (!s_tracking) {
         return;
     }
     s_tracking = false;
-    const int dx = static_cast<int>(s_last_x) - static_cast<int>(s_start_x);
+    const int raw_dx = static_cast<int>(s_last_x) - static_cast<int>(s_start_x);
     const int raw_dy = static_cast<int>(s_last_y) - static_cast<int>(s_start_y);
-    // Positive is down the screen as the reader sees it.
+    // Positive is down and to the right of the screen as the reader sees it.
+    const int dx = kInvertX ? -raw_dx : raw_dx;
     const int dy = kInvertY ? -raw_dy : raw_dy;
     const int vertical = dy < 0 ? -dy : dy;
     const int horizontal = dx < 0 ? -dx : dx;
-    if (vertical < s_min_travel || vertical <= horizontal) {
-        ESP_LOGD(kTag, "gesture dropped, dx %d dy %d, needs %d", dx, dy, s_min_travel);
+
+    input::Event event = input::Event::None;
+    const char *named = "";
+    if (horizontal > vertical) {
+        if (horizontal >= s_min_travel_x) {
+            // The finger carries the notes with it, as it carries the text on
+            // the other axis: dragging left brings the older note in from the
+            // right, the way a photo carousel moves.
+            event = dx < 0 ? input::Event::SwipeLeft : input::Event::SwipeRight;
+            named = dx < 0 ? "left" : "right";
+        }
+    } else if (vertical >= s_min_travel_y) {
+        event = dy < 0 ? input::Event::SwipeUp : input::Event::SwipeDown;
+        named = dy < 0 ? "up" : "down";
+    }
+    if (event == input::Event::None) {
+        ESP_LOGD(kTag, "gesture dropped, dx %d dy %d, needs %d or %d", dx, dy, s_min_travel_x,
+                 s_min_travel_y);
         return;
     }
     // Raw coordinates rather than the verdict alone, because a controller
     // mounted the other way up shows here before it shows as a dead gesture.
-    ESP_LOGI(kTag, "swipe %s, raw (%u,%u) to (%u,%u)", dy < 0 ? "up" : "down",
+    ESP_LOGI(kTag, "swipe %s, raw (%u,%u) to (%u,%u)", named,
              static_cast<unsigned>(s_start_x), static_cast<unsigned>(s_start_y),
              static_cast<unsigned>(s_last_x), static_cast<unsigned>(s_last_y));
-    input::post(dy < 0 ? input::Event::SwipeUp : input::Event::SwipeDown);
+    input::post(event);
 }
 
 // Reads one report and folds it into the gesture in progress.

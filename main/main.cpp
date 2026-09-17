@@ -3,6 +3,7 @@
 // =============================================================================
 // Boot order for the Obsidian Sticky firmware: latch power, bring up storage,
 // display, audio, buttons, and networking, then hand over to pipeline.cpp.
+#include "app/history.h"
 #include "app/input.h"
 #include "app/pipeline.h"
 #include "app/settings.h"
@@ -51,6 +52,9 @@ extern "C" void app_main()
 
     ESP_ERROR_CHECK(init_nvs());
     ESP_ERROR_CHECK(settings::init());
+    // Needs the capacity from settings, and must precede pipeline::start()
+    // because the pipeline task reads the newest note as it comes up.
+    ESP_ERROR_CHECK(history::init(settings::get().history_max));
     buzzer::init();
     buzzer::set_enabled(settings::get().beep);
     // Before anything measures or draws text, because the faces differ in
