@@ -30,7 +30,7 @@ std::string trim(std::string text)
 }  // namespace
 
 
-Result transcribe()
+Result transcribe(uint32_t first_sample, size_t count)
 {
     Result result;
     const settings::Values s = settings::get();
@@ -38,7 +38,7 @@ Result transcribe()
         result.error = "STT not configured";
         return result;
     }
-    if (clip::sample_count() == 0) {
+    if (count == 0) {
         result.error = "No audio";
         return result;
     }
@@ -53,9 +53,17 @@ Result transcribe()
     const std::vector<http::Header> headers = {
         {"Authorization", "Bearer " + s.stt_key},
     };
-    const http::Response response =
-        http::post_wav(s.stt_url, headers, fields, http::is_private_host(s.stt_url));
+    // Every segment pays its own handshake, which is the cheaper half of a
+    // trade measured in docs/latency.md: a socket reused after a POST uploads
+    // at a third the speed, and 2 s of handshake beats 20 s of that.
+    const http::Response response = http::post_wav(
+        s.stt_url, headers, fields, first_sample, count, http::is_private_host(s.stt_url));
     if (!response.ok()) {
+        // A key or a model name will fail the same way every time, and each
+        // retry re-uploads the whole segment, so only the transient shapes
+        // are worth another go.
+        result.retryable = response.err != ESP_OK || response.status == 408 ||
+                           response.status == 429 || response.status >= 500;
         result.error = response.summary();
         return result;
     }

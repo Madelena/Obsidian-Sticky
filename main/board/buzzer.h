@@ -1,9 +1,9 @@
 // =============================================================================
 // BUZZER
 // =============================================================================
-// Short audible cues for the eyes-free flow: record start and stop, saved,
-// error. All calls block for the duration of the cue, so call them from the
-// pipeline task, never from a button callback.
+// Short audible cues for the eyes-free flow: record start, latched, stop,
+// saved, error. All calls block for the duration of the cue, so call them from
+// the pipeline task, never from a button callback.
 #pragma once
 
 #include <cstdint>
@@ -25,9 +25,11 @@ void set_enabled(bool enabled);
 void beep(uint32_t frequency_hz, uint32_t duration_ms);
 
 // CUE PLAYERS
-// Fixed patterns: rising pair for record start, single for stop, high double
-// for saved, low long for error.
+// Fixed patterns: rising pair for record start, one short high blip when a tap
+// latches the recording and the hand can come off, single for stop, high
+// double for saved, low long for error.
 void cue_start();
+void cue_latched();
 void cue_stop();
 void cue_saved();
 void cue_error();

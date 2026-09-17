@@ -40,7 +40,8 @@ transcription, Anthropic for cleanup, Obsidian's Local REST API on the LAN.
 | TLS handshake to api.groq.com | 1771, 1803, 2110, 2119, 2240 ms |
 | TLS handshake to api.anthropic.com | 1741, 1917, 1970 ms |
 | Reused warm connection | 2 to 3 ms |
-| Upload throughput over TLS | 100, 124, 204 kB/s across runs |
+| Upload throughput over TLS, fresh socket | 100, 122, 124, 132, 139, 204, 205 kB/s across runs |
+| Upload throughput over TLS, socket reused after a POST | 29, 38 kB/s |
 | Groq trivial GET /models reply | 289 to 594 ms |
 | Groq transcription reply, 12 to 13 s of audio | 1092 to 1662 ms |
 | Anthropic messages reply | 911 to 943 ms |
@@ -124,16 +125,87 @@ The meter line is the cost of the partial refresh that was already running
 when the button was released: the first draw after that has to wait for the
 shared rotation buffer.
 
+## Why segment uploads do not reuse a socket
+
+Handing a socket back after a POST, so a recording's segments all ride one
+connection, looks like free money: the handshake is 1.8 to 2.2 s and a reused
+connection connects in 3 ms. It was built, and it made every note slower.
+
+| Build | Payload | Upload | Rate |
+| --- | --- | --- | --- |
+| Before segmenting, fresh socket | 1983909 B | 14933 ms | 132 kB/s |
+| Segments, socket reused after a POST | 756133 B | 25503 ms | 29 kB/s |
+| Segments, socket reused after a POST | 719269 B | 18621 ms | 38 kB/s |
+| Segments, fresh socket each time | 771493 B | 5541 ms | 139 kB/s |
+| Segments, fresh socket each time | 782757 B | 6377 ms | 122 kB/s |
+| Segments, fresh socket each time | 120229 B | 586 ms | 205 kB/s |
+
+A reused socket uploads at roughly a third the rate. The handshake it saves is
+about 2 s; the throughput it costs is around 20 s on a segment this size. The
+122 kB/s row paid a full 1953 ms handshake and still finished three times
+sooner than the 38 kB/s row that connected in 3 ms.
+
+The mechanism is not known, and guessing at one would be worse than saying so.
+Two explanations were ruled out. Slow start is not it: solving for a fixed
+startup cost across the 132 and 38 kB/s rows gives a negative upload time, so
+the rate itself differs rather than the ramp. Recording load is not it either,
+since the 139 kB/s row went out while the capture task was running and the
+panel was refreshing every second.
+
+Two traps this hid behind, worth knowing before anyone tries it again:
+
+- The slow rows are ordinary-looking. `connect 3 ms` and `HTTP 200` are what a
+  working warm connection looks like, and only the kB/s column says otherwise.
+- At 29 kB/s the upload is slower than the 32 kB/s the microphone produces, so
+  segments can never get ahead and the whole feature silently does nothing.
+  That reads as "chunking does not work" rather than "the socket is slow", and
+  it very nearly bought a codec nobody needed.
+
+## What segmenting changed
+
+The table above describes a serial pipeline that no longer exists for
+anything longer than one segment. The audio is now cut at pauses and each
+piece is transcribed while the user is still talking, so at release the only
+audio still to send is the tail since the last cut, and most of the Groq
+thinking time has already been spent.
+
+That takes the top two rows out of the post-release budget for a long note
+and leaves the tail upload in their place, bounded by the segment length
+rather than the recording length. A ninety-second note used to send 2.88 MB
+after the button came up; it now sends whatever is left of the last segment,
+which is at most about 12 seconds of audio and usually half that.
+
+Measured on a 52 second note against a 62 second one on the previous build,
+both with cleanup on:
+
+| Build | Note | Release to saved |
+| --- | --- | --- |
+| Before segmenting | 62 s | 17.8 s |
+| Segmenting, fresh socket per segment | 52 s | 11.0 s |
+
+About 5 s of that 11 was waiting out a segment still in flight, because the
+button came up 3.5 s after a cut. That is not wasted work, it is transcription
+that had to happen anyway. The win that matters is the shape rather than the
+size: the old cost grows with the length of the recording, and this one is
+bounded by roughly one segment plus the tail however long you talk. A five
+minute note is about 73 s of upload on the old build and about 15 s on this
+one.
+
+The every-twentieth-partial promotion to a full refresh is also suppressed
+while recording, which removes about fifteen two-second panel stalls from a
+five minute recording. The meter still updates every second.
+
 ## Remaining levers, honestly costed
 
-1. **Compress the audio.** Roughly 2.9 s, the biggest remaining win, and the
-   most expensive to take. It carries format risk on both providers and real
-   encoder work. The investigation and why it was deferred are in
+1. **Compress the audio.** Still the biggest remaining win on a short note,
+   and still the most expensive to take: format risk on both providers and
+   real encoder work. It matters much less for a long one now that the upload
+   overlaps the speaking. The investigation and why it was deferred are in
    `docs/architecture.md` under "Codecs".
 2. **Make the final draw partial instead of full.** About 1.1 s, at the cost
    of ghosting on the one screen the user actually sits and reads. Not an
    obvious trade.
-3. **Update the recording meter every two seconds instead of every one.**
-   About 0.3 s on average, because at a one-second cadence a refresh is nearly
-   always in flight when the button comes up. Cheap to try, and it costs the
-   meter half its liveliness.
+3. **Cut the first segment sooner.** A recording shorter than the fifteen
+   second minimum is still one upload after release, exactly as before, so
+   the shortest notes saw none of the gain above. Lowering the floor would
+   cost Groq's ten-second minimum billing on every piece.

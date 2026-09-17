@@ -7,6 +7,7 @@
 // shows the note whole.
 #include "ui/screen.h"
 
+#include <algorithm>
 #include <mutex>
 
 #include "app/settings.h"
@@ -30,7 +31,14 @@ constexpr int kEdgeGap = 12;      // Clearance between the note and the bar
 // note pages, so they own their own rhythm rather than the bar's.
 constexpr int kParagraphGap = 24;    // Under the heading, and under the table
 constexpr int kLabelGutter = 28;     // Between the two columns of the table
-constexpr int kMeterWidth = 220;
+// A row of cells rather than one filling bar, because a bar that fills from
+// the left reads as progress towards something and a recording is not going
+// anywhere. Tall and narrow so the row scans as a level.
+constexpr int kMeterCells = 20;
+constexpr int kMeterCellWidth = 5;
+constexpr int kMeterCellHeight = 26;
+constexpr int kMeterCellGap = 6;
+constexpr int kMeterWidth = kMeterCells * kMeterCellWidth + (kMeterCells - 1) * kMeterCellGap;
 // Three slots of one pitch, drawn from the right margin inwards. The power
 // slot is reserved whether or not a cable is in, so the aerial and the cell
 // never shift under a change that is not about them.
@@ -55,6 +63,7 @@ std::string s_caption;
 std::string s_status;
 bool s_asleep = false;
 int s_first_line = 0;    // Topmost wrapped line on screen
+bool s_pin_to_end = false;  // Jump to the last screenful at the next paint
 int s_total_lines = 0;
 int s_visible_lines = 1;
 bool s_radio_off = false;
@@ -163,6 +172,25 @@ Layout layout_note()
     return layout;
 }
 
+// One meter cell, filled or hollow, with its four corner pixels left out.
+// That is as much rounding as five pixels of width can show, and it is enough
+// to stop the row reading as a row of bricks.
+void draw_meter_cell(int x, int y, bool filled)
+{
+    const int w = kMeterCellWidth;
+    const int h = kMeterCellHeight;
+    if (filled) {
+        canvas::fill_rect(x, y + 1, w, h - 2);
+        canvas::fill_rect(x + 1, y, w - 2, h);
+        return;
+    }
+    canvas::fill_rect(x + 1, y, w - 2, 1);
+    canvas::fill_rect(x + 1, y + h - 1, w - 2, 1);
+    canvas::fill_rect(x, y + 1, 1, h - 2);
+    canvas::fill_rect(x + w - 1, y + 1, 1, h - 2);
+}
+
+
 // Draws the status bar: mood or word left, meter or the icon cluster right.
 void draw_status(int level)
 {
@@ -177,10 +205,14 @@ void draw_status(int level)
     }
 
     if (level >= 0) {
-        const int x = canvas::kWidth - kMargin - kMeterWidth;
-        canvas::fill_rect(x, mid - 11, kMeterWidth, 22, true);
-        canvas::fill_rect(x + 2, mid - 9, kMeterWidth - 4, 18, false);
-        canvas::fill_rect(x + 2, mid - 9, (kMeterWidth - 4) * level / 100, 18, true);
+        const int left = canvas::kWidth - kMargin - kMeterWidth;
+        const int top_y = mid - kMeterCellHeight / 2;
+        // Anything audible lights the first cell, so "hearing you faintly"
+        // never looks the same as "hearing nothing at all".
+        const int lit = level <= 0 ? 0 : std::max(1, level * kMeterCells / 100);
+        for (int cell = 0; cell < kMeterCells; ++cell) {
+            draw_meter_cell(left + cell * (kMeterCellWidth + kMeterCellGap), top_y, cell < lit);
+        }
         return;
     }
 
@@ -242,6 +274,12 @@ void draw_note()
     const Layout layout = layout_note();
     s_total_lines = static_cast<int>(layout.lines.size());
     s_visible_lines = layout.visible;
+    // Only here can the last screen be worked out, because only here has the
+    // note been wrapped against the face that will actually draw it.
+    if (s_pin_to_end) {
+        s_pin_to_end = false;
+        s_first_line = max_first_line();
+    }
     // A caption appearing, or a larger face, can strand the view past the end.
     if (s_first_line > max_first_line()) {
         s_first_line = max_first_line();
@@ -321,11 +359,12 @@ void paint(int level, bool full)
 }  // namespace
 
 
-void set_note(const std::string &note)
+void set_note(const std::string &note, bool tail)
 {
     std::lock_guard<std::mutex> lock(s_mutex);
     s_note = note;
     s_first_line = 0;
+    s_pin_to_end = tail;
 }
 
 
@@ -405,6 +444,7 @@ bool scroll(int delta)
         return false;
     }
     s_first_line = target;
+    s_pin_to_end = false;
     paint(-1, false);
     return true;
 }

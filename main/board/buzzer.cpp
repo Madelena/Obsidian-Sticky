@@ -82,6 +82,12 @@ void cue_start()
 }
 
 
+void cue_latched()
+{
+    beep(2600, 50);
+}
+
+
 void cue_stop()
 {
     beep(2000, 80);

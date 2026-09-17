@@ -15,10 +15,10 @@ namespace input {
 
 enum class Event : uint8_t {
     None,
-    AiDown,     // AI button pressed: start recording immediately
-    AiUp,       // AI button released: stop recording
+    AiDown,     // AI button pressed: start recording, or stop a latched one
+    AiUp,       // AI button released: stop recording unless the press latched
     UpClick,    // Up button: scroll back, or show the info screen
-    UpHeld,     // Up button held 3 s: power off
+    UpHeld,     // Up button held 3 s: power off, or cancel a latched recording
     DownClick,  // Down button: scroll on, or retry the failed stage
     DownHeld,   // Down button held 3 s: enter setup mode
     SwipeUp,    // Finger swiped up the panel: show the next screen of the note

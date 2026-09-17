@@ -65,11 +65,13 @@ void wait_warm(uint32_t timeout_ms);
 void drop_warm();
 
 // WAV UPLOADER
-// Posts a multipart form whose last part is the current recording from
-// clip.cpp as a WAV file named note.wav; fields become plain text parts.
-// insecure_tls skips verification the same way request() does.
+// Posts a multipart form whose last part is count samples of the clip.cpp ring
+// from first_sample, as a WAV file named note.wav; fields become plain text
+// parts. insecure_tls skips verification the same way request() does. The
+// range must stay resident for the whole call, because the body is replayed
+// on a redirect or a stale socket.
 Response post_wav(const std::string &url, const std::vector<Header> &headers,
-                  const std::vector<Header> &fields, bool insecure_tls = false,
-                  int timeout_ms = 60000);
+                  const std::vector<Header> &fields, uint32_t first_sample, size_t count,
+                  bool insecure_tls = false, int timeout_ms = 60000);
 
 }  // namespace http

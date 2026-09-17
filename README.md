@@ -31,14 +31,17 @@ device works as a sticky note on your desk until you pick it up again.
 | --- | --- |
 | Hold the side (AI) button | Starts recording. The screen shows a level meter and the elapsed time. |
 | Release the side button | Stops recording and runs transcribe, optional cleanup, and save. |
+| Tap the side button | Latches the recording, so it keeps running with no hand on the button. A short blip confirms it. Tap again to stop and save, or tap again straight away to throw it out. Hold Up for 3 seconds to abandon a latched recording. |
 | Press Up | Scrolls back through a note too long to fit. At the top it shows the info screen instead: Wi-Fi network, IP address, battery, where notes are being saved, and the firmware version. It stays up until you press a button, which returns you to the note. |
-| Press Down | Scrolls on through a long note. After a failure it retries the failed stage instead: a failed transcribe retries from the audio, which is still in memory, and a failed save retries from the text, so nothing has to be spoken again. |
+| Press Down | Scrolls on through a long note. After a failure it retries the failed stage instead: a failed transcribe retries only the part that failed, since the rest is already text, and a failed save retries from the text, so nothing has to be spoken again. |
 | Swipe up or down on the screen | Also scrolls a long note, on a device whose touch controller reports touches. See the note below. |
 | Hold Down for 3 seconds | Enters setup mode. The device stops its normal work, starts the "Sticky-Setup" Wi-Fi network, and shows the setup instructions. Holding Down again in setup mode restarts the device. |
 | Hold Up for 3 seconds | Powers off, leaving a "Powered off" page on the screen. Hold the side button to turn it back on. The side button cannot power off, because holding it is how you record. |
 
-Recordings shorter than about a third of a second are discarded, and a single
-recording stops at 90 seconds. Holding the button without speaking ends at
+Recordings shorter than about a third of a second are discarded. There is no
+length limit while the audio is being transcribed as you speak; a latched
+recording stops itself after ten minutes, and a held one lasts as long as
+your hand does. Holding the button without speaking ends at
 "No speech detected" and leaves the previous note alone, so nothing is saved.
 Switching the device on does not start a recording, even though you switch it
 on by holding the same button; press it again once the screen says Ready.

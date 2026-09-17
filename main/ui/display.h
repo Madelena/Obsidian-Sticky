@@ -24,6 +24,13 @@ esp_err_t refresh_full();
 // promoted to a full refresh to clear accumulated ghosting.
 esp_err_t refresh_partial();
 
+// PROMOTION SUPPRESSOR
+// Holds off that promotion while a screen is transient and something else is
+// guaranteed to refresh fully after it. Recording turns it off: the promotion
+// blocks the pipeline task for two seconds and flashes the panel mid-sentence,
+// and the note or the failure that follows is drawn full either way.
+void set_promotion(bool enabled);
+
 // REFRESH WAITER
 // Blocks until a refresh handed over earlier has finished its waveform. Only
 // needed before something that must see a settled panel; ordinary drawing

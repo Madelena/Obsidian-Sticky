@@ -16,8 +16,9 @@ namespace {
 constexpr const char *kTag = "input";
 constexpr uint16_t kShortPressMs = 180;
 // The AI button cannot carry a long press: holding it is how you record, and
-// the release drain in pipeline.cpp swallows anything queued behind it. Power
-// off lives on Up instead, matching setup mode on Down.
+// record_loop() in pipeline.cpp reads the raw level rather than the queue so a
+// release lands even mid-refresh. Power off lives on Up instead, matching
+// setup mode on Down.
 constexpr uint16_t kHoldMs = 3000;
 
 QueueHandle_t s_queue = nullptr;

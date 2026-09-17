@@ -14,8 +14,10 @@
 namespace screen {
 
 // NOTE SETTER
-// Stores the note text (UTF-8) shown in the body and rewinds to the top.
-void set_note(const std::string &note);
+// Stores the note text (UTF-8) shown in the body and rewinds to the top, or
+// to the last screenful when tail is set, which is what a transcript still
+// being written wants: the words that just arrived are at the end.
+void set_note(const std::string &note, bool tail = false);
 
 // CAPTION SETTER
 // Stores the line shown above the status band, such as an error reason; an

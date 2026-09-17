@@ -34,9 +34,17 @@ constexpr const char *kBoundary = "----ObsidianStickyBoundary7f3a9c";
 // warm-up may use a different path on the same host. Two slots cover the
 // transcription host and the cleanup host.
 constexpr size_t kWarmSlots = 2;
+
+// A parked connection is only worth claiming while the peer is still there.
+// esp_http_client_open against a hung-up peer succeeds locally and only fails
+// at fetch_headers, so claiming a dead one costs the whole upload before the
+// retry starts. Server idle timeouts start around 60 s, so half that is safe.
+constexpr int64_t kWarmMaxAgeUs = 30 * 1000000;
+
 struct WarmSlot {
     esp_http_client_handle_t client = nullptr;
     std::string host;
+    int64_t parked_us = 0;
 };
 WarmSlot s_warm[kWarmSlots];
 std::mutex s_warm_mutex;
@@ -147,6 +155,10 @@ Response exchange(esp_http_client_handle_t client, size_t body_length,
                 read_body(client, response.body);
             }
         }
+        // Always. Handing this socket back for the next request instead was
+        // measured at 29 to 38 kB/s against 122 to 205 on a fresh one, so a
+        // reused connection loses far more than the handshake it saves. See
+        // "Why segment uploads do not reuse a socket" in docs/latency.md.
         esp_http_client_close(client);
 
         // Splits one round trip so a slow note can be blamed on the right
@@ -179,17 +191,41 @@ Response exchange(esp_http_client_handle_t client, size_t body_length,
 esp_http_client_handle_t claim_warm(const std::string &url)
 {
     const std::string host = host_of(url);
+    const int64_t now = esp_timer_get_time();
     std::lock_guard<std::mutex> lock(s_warm_mutex);
     for (WarmSlot &slot : s_warm) {
-        if (slot.client != nullptr && slot.host == host) {
-            esp_http_client_handle_t client = slot.client;
-            slot.client = nullptr;
-            slot.host.clear();
-            esp_http_client_set_url(client, url.c_str());
-            return client;
+        if (slot.client == nullptr || slot.host != host) {
+            continue;
         }
+        esp_http_client_handle_t client = slot.client;
+        const int64_t age_us = now - slot.parked_us;
+        slot.client = nullptr;
+        slot.host.clear();
+        if (age_us > kWarmMaxAgeUs) {
+            esp_http_client_cleanup(client);
+            ESP_LOGI(kTag, "dropped %s, parked %lld s", host.c_str(), age_us / 1000000);
+            return nullptr;
+        }
+        esp_http_client_set_url(client, url.c_str());
+        return client;
     }
     return nullptr;
+}
+
+// Puts a still-open connection back in a free slot, the inverse of
+// claim_warm. False means every slot was taken and the caller still owns it.
+bool park(esp_http_client_handle_t client, const std::string &host)
+{
+    std::lock_guard<std::mutex> lock(s_warm_mutex);
+    for (WarmSlot &slot : s_warm) {
+        if (slot.client == nullptr) {
+            slot.client = client;
+            slot.host = host;
+            slot.parked_us = esp_timer_get_time();
+            return true;
+        }
+    }
+    return false;
 }
 
 // Reuses a warmed connection when one is held, otherwise builds a new client.
@@ -225,15 +261,7 @@ void warm_one(const WarmTarget &target)
     if (esp_http_client_open(client, 0) == ESP_OK && esp_http_client_fetch_headers(client) >= 0) {
         std::string discard;
         read_body(client, discard);
-        std::lock_guard<std::mutex> lock(s_warm_mutex);
-        for (WarmSlot &slot : s_warm) {
-            if (slot.client == nullptr) {
-                slot.client = client;
-                slot.host = host_of(target.url);
-                held = true;
-                break;
-            }
-        }
+        held = park(client, host_of(target.url));
     }
     ESP_LOGI(kTag, "warm %s: %u ms, %s", host_of(target.url).c_str(), now_ms() - started,
              held ? "holding" : "failed");
@@ -302,7 +330,8 @@ Response request(const char *method, const std::string &url, const std::vector<H
 
 
 Response post_wav(const std::string &url, const std::vector<Header> &headers,
-                  const std::vector<Header> &fields, bool insecure_tls, int timeout_ms)
+                  const std::vector<Header> &fields, uint32_t first_sample, size_t count,
+                  bool insecure_tls, int timeout_ms)
 {
     std::string preamble;
     for (const Header &field : fields) {
@@ -316,7 +345,7 @@ Response post_wav(const std::string &url, const std::vector<Header> &headers,
     preamble += "\r\nContent-Disposition: form-data; name=\"file\"; filename=\"note.wav\"\r\n"
                 "Content-Type: audio/wav\r\n\r\n";
     const std::string epilogue = std::string("\r\n--") + kBoundary + "--\r\n";
-    const size_t total = preamble.size() + clip::wav_size() + epilogue.size();
+    const size_t total = preamble.size() + clip::wav_size(count) + epilogue.size();
 
     std::vector<Header> all = headers;
     all.push_back({"Content-Type", std::string("multipart/form-data; boundary=") + kBoundary});
@@ -330,15 +359,22 @@ Response post_wav(const std::string &url, const std::vector<Header> &headers,
     }
 
     // Streams header, WAV header, PCM in chunks, and trailer from the clip.
+    // The inner run is what the ring hands back before its wrap, so a segment
+    // straddling the end of the buffer goes out as two or more writes.
     auto stream_form = [&]() {
+        constexpr size_t kChunkSamples = kUploadChunk / sizeof(int16_t);
         uint8_t wav_header[clip::kWavHeaderSize];
-        clip::write_wav_header(wav_header);
-        const char *pcm = reinterpret_cast<const char *>(clip::samples());
-        const size_t pcm_bytes = clip::sample_count() * sizeof(int16_t);
+        clip::write_wav_header(wav_header, static_cast<uint32_t>(count * sizeof(int16_t)));
         bool sent = write_all(client, preamble.data(), preamble.size()) &&
                     write_all(client, reinterpret_cast<const char *>(wav_header), sizeof(wav_header));
-        for (size_t offset = 0; sent && offset < pcm_bytes; offset += kUploadChunk) {
-            sent = write_all(client, pcm + offset, std::min(kUploadChunk, pcm_bytes - offset));
+        uint32_t offset = first_sample;
+        for (size_t left = count; sent && left > 0;) {
+            size_t run = 0;
+            const char *pcm = reinterpret_cast<const char *>(clip::run_at(offset, left, run));
+            const size_t chunk = std::min(run, kChunkSamples);
+            sent = write_all(client, pcm, chunk * sizeof(int16_t));
+            offset += static_cast<uint32_t>(chunk);
+            left -= chunk;
         }
         return sent && write_all(client, epilogue.data(), epilogue.size());
     };

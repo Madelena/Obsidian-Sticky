@@ -13,6 +13,7 @@ Everything after boot runs on these tasks.
 | --- | --- | --- | --- |
 | `pipeline` | `pipeline::start()` | 20480, 5 | The state machine, every drawing decision, the buzzer, NVS writes, mic start and stop |
 | `capture` | `record_and_process()` | 4096, 10 | The I2S PDM RX channel, for the length of one recording |
+| `uploader` | `pipeline::start()` | 16384, 4 | Transcribing finished segments while the recording is still running |
 | `render` | `display::init()` | 4096, 4 | SPI2 and the panel; the only task that waits out a waveform |
 | `warm` | `http::warm_async()` | 8192, 4 | Opening TLS connections during recording |
 | `touch` | `touch::init()` | 3072, 4 | I2C0, the GT911, and turning a finger into a swipe |
@@ -44,9 +45,16 @@ Rules that follow from the split:
 `IDLE -> RECORDING -> TRANSCRIBING -> CLEANING -> SAVING`, in
 `main/app/pipeline.cpp`, which is the only place stages are sequenced.
 
-- **RECORDING** runs while `input::ai_pressed()` holds, capped at 90 seconds
-  by `clip::kMaxSamples`. Anything under 300 ms is discarded as a fumble.
-- **TRANSCRIBING** needs Wi-Fi, and waits up to 20 s for it before failing.
+- **RECORDING** runs while `input::ai_pressed()` holds, or until the next tap
+  when a tap latched it. There is no length cap: `clip` is a ring, and a
+  segment's samples are freed once it has become text, so what bounds a
+  recording is how far the uploader falls behind rather than how much PSRAM
+  there is. A latched recording stops itself at ten minutes. Anything under
+  300 ms is discarded as a fumble.
+- **TRANSCRIBING** needs Wi-Fi, and waits up to 20 s for it before failing. By
+  the time it runs, most of the audio is usually already text: the `uploader`
+  task has been sending finished segments throughout the recording, so this
+  stage normally drains only the tail.
 - **CLEANING** is skipped when `llm_on` is off. A failed cleanup is not a
   failed note: the raw transcript is saved and a caption says so. Only a
   cleanup that succeeds replaces the text.
@@ -58,11 +66,40 @@ A failure calls `fail()`, which records the stage in `s_retry_stage` and puts
 
 | Failed stage | Down retries from | Because |
 | --- | --- | --- |
-| Transcribe | the audio, still in PSRAM | Nothing has to be spoken again |
+| Transcribe | the segments not yet transcribed, still in PSRAM | Only the part that failed has to be sent again |
 | Save | the text, still in `s_pending_text` | The upload does not repeat |
 
 Cleanup has no retry stage of its own, because its failure path has already
 produced a saveable note.
+
+A Transcribe retry is idempotent: a segment that became text has left the
+queue, so re-entering `process()` picks up where it stopped. The second such
+retry gives up on the failing segment instead, saves what did transcribe, and
+captions how many parts are missing.
+
+## Segmenting the audio
+
+No OpenAI-compatible transcription endpoint takes a live audio stream, so the
+recording is cut into finished WAVs and each is posted on its own while the
+user keeps talking. That turns the upload from the largest post-release cost
+into something that mostly happens for free during the recording.
+
+The detector lives on the pipeline task and reads the per-block RMS that
+`clip::append()` folds in on the capture task. It cuts where the room goes
+quiet, on a two-threshold Schmitt trigger with 640 ms of hangover, and at
+the midpoint of the pause rather than its start, so both sides of the seam
+keep padding and no audio is sent twice. A segment has to reach roughly 8
+seconds before a cut is allowed, and a cut is forced at about 12 if the room
+never falls quiet, at the quietest block in the trailing two seconds so it
+lands between words where it can. Segment length is a feedback decision, not
+a network one: it is how often new words can reach the screen. Groq bills a
+minimum of ten seconds per request, so the shorter segments pay for a little
+silence, which at roughly four cents an hour is worth less than the feedback.
+
+Cross-segment context is deliberately not passed as the endpoint's `prompt`.
+Whisper echoes prompts on low-content audio, and `llm_client::clean()`
+already runs over the whole concatenation, where it can see both sides of
+every seam at once.
 
 ## Warm connections
 
@@ -93,6 +130,16 @@ Two consequences worth holding on to:
 - `warm_one()` cannot use `exchange()`, even though the flow is nearly
   identical, because `exchange()` closes the connection when it is done.
   Closing the socket is the one thing a warm-up must not do.
+- A slot is claimed once and never handed back. Parking a socket after a POST
+  and reusing it for the next segment was tried and measured three times
+  slower than a fresh connection, so every segment pays its own handshake.
+  `docs/latency.md` has the numbers under "Why segment uploads do not reuse a
+  socket". Do not try it again without re-reading that section.
+- A parked slot is dropped after 30 seconds. `esp_http_client_open()` against
+  a peer that has hung up succeeds locally and only fails at
+  `fetch_headers()`, so claiming a dead socket wastes the entire upload
+  before the retry starts. Half of a typical 60 second server idle timeout is
+  the safe side of that trade.
 - `pipeline::process()` calls `http::wait_warm(4000)` before its first
   request, so a request never races the handshake it is trying to skip. The
   bound is never worse than one handshake: if warming has not finished, the

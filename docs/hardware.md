@@ -149,8 +149,29 @@ handle from it.
 
 ## Microphone
 
-- PDM, mono, 16 kHz, 16-bit, read through the I2S PDM RX driver. `clip` caps
-  a recording at 90 seconds, which is 2.88 MB of PCM in PSRAM.
+- PDM, mono, 16 kHz, 16-bit, read through the I2S PDM RX driver. `clip` holds
+  90 seconds of PCM in 2.88 MB of PSRAM, but as a ring rather than a cap: a
+  segment's samples are freed once it has become text, so that is the backlog
+  a recording may fall behind by, not the length it may reach.
+- **The samples carry a DC offset of about 1300.** It is not the power-up ramp
+  below and it does not settle out; it is there for the whole recording. RMS
+  taken on the raw samples is therefore `sqrt(1300^2 + voice^2)`, which the
+  offset dominates: a silent room measured 1308 and ordinary speech only 1528.
+  `clip::append()` subtracts each block's own mean before squaring. Without
+  that the level meter cannot move and the silence detector never sees a
+  pause, because every block reads louder than any sensible threshold.
+- Voice levels once the offset is gone, for anyone choosing a threshold: a
+  silent room peaks under 100, a whisper at about 139, ordinary speech at
+  about 466. Full scale is 32768 and nothing a voice does comes near it, so
+  fixed thresholds picked against full scale are all wrong. `clip.cpp` tracks
+  the floor and the recent peak per recording instead.
+- **The microphone hears the buzzer**, which is on GPIO48 beside it. The start
+  cue measures 2142 RMS, louder than any voice this microphone picks up, so it
+  pins the meter and poses as speech to the detector. The capture task in
+  `pipeline.cpp` reads and drops samples until `s_capture_gate` opens, 40 ms
+  after the cue ends, so the beep never reaches the clip at all. It keeps
+  reading rather than starting late on purpose: a reader that waited would
+  find the DMA ring holding its 192 ms of beep the moment it began.
 - Mic power is `PIN_MIC_EN` (GPIO38), active high, with roughly 20 ms to
   settle after switching it on.
 - The first 100 ms of samples after `pdm_mic::start()` are read and thrown

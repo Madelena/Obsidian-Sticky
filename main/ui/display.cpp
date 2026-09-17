@@ -34,6 +34,7 @@ seeed_epaper_panel_handle_t s_panel = nullptr;
 spi_device_handle_t s_spi = nullptr;
 uint8_t *s_rotated = nullptr;
 int s_partials_since_full = 0;
+bool s_promotion = true;
 
 // The waveform blocks for about a second on a partial and two on a full, and
 // the panel shares nothing with the radio, so the wait belongs on its own
@@ -198,10 +199,19 @@ esp_err_t refresh_full()
 
 esp_err_t refresh_partial()
 {
-    if (++s_partials_since_full >= kPartialsBeforeFull) {
+    // A suppressed partial does not count either, or a recording's six
+    // hundred of them would land the promotion on the very next screen, which
+    // is "Transcribing" and sits in the path the user is waiting on.
+    if (s_promotion && ++s_partials_since_full >= kPartialsBeforeFull) {
         return refresh_full();
     }
     return start_refresh(SEEED_EPAPER_REFRESH_PARTIAL);
+}
+
+
+void set_promotion(bool enabled)
+{
+    s_promotion = enabled;
 }
 
 

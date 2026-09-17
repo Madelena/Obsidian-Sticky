@@ -44,9 +44,23 @@ chrome and should sit tighter than the thing it describes. It has no height of
 its own: `bar_top()` places the one line of 30 px bold by that bottom margin
 and everything else in the bar centers on it. The band it used to be was a
 leftover from the rule that closed it, and sizing one cost the note 7 px for
-nothing. While recording, the right side of the status band is replaced by a
-220 px level meter. A caption costs the body one line by pulling
-`body_bottom()` up; an empty caption gives the space straight back.
+nothing. While recording, the right side of the status band is replaced by a level
+meter. A caption costs the body one line by pulling `body_bottom()` up; an
+empty caption gives the space straight back.
+
+The meter is twenty cells, each 5 px by 26 px with its corners clipped, filled
+from the left. It is not one bar that fills: a bar reads as progress towards
+something, and a recording is not going anywhere. Anything audible lights the
+first cell, so hearing you faintly never looks like hearing nothing.
+
+It shows the loudest 32 ms block of the last second, logarithmically, between
+the room's own noise floor and the loudest the room has lately been. Both ends
+move, and `main/audio/clip.cpp` re-measures them for every recording. Three
+attempts at fixed ends failed, each fitted to one voice at one distance in one
+room: this microphone reads a whisper at 139 and ordinary speech at 466, which
+are both indistinguishable from nothing against a full scale of 32768. The
+silence detector takes its thresholds from the same floor, so the bar and the
+cuts cannot disagree about what the room sounds like.
 
 The band sits on the bottom edge so the note starts at the top of the page,
 where the eye already is. The caption stays beside the band rather than beside
@@ -95,8 +109,8 @@ simply waiting is nothing. Every other state is worth reading and stays as
 text in the same 30 px bold, so the band is empty exactly when there is
 nothing to report:
 
-- Working: Connecting Wi-Fi, Listening M:SS, Transcribing, Cleaning up,
-  Saving.
+- Working: Connecting Wi-Fi, Listening M:SS, Transcribing, Transcribing n/N,
+  Cleaning up, Saving.
 - Done: Saved HH:MM, which is a receipt and stays until the next thing
   happens, so the band is rarely blank in normal use.
 - Nothing to save: No speech detected.
@@ -260,13 +274,20 @@ the interaction and the screen carries the result. The cues are in
 | Cue | Sound | Means |
 | --- | --- | --- |
 | `cue_start()` | Rising pair, 1800 then 2400 Hz | Recording has started |
+| `cue_latched()` | One short 2600 Hz blip | The tap latched, the hand can come off |
 | `cue_stop()` | One 2000 Hz tone | Recording has stopped |
 | `cue_saved()` | High double, 2800 Hz twice | The note is in the vault |
 | `cue_error()` | One low 900 Hz tone, 250 ms | A stage failed |
 
-The `beep` setting switches all four off, and `buzzer::beep()` still spends
+The `beep` setting switches all five off, and `buzzer::beep()` still spends
 the duration as a delay when it is off, so timing does not change with the
 sound.
+
+`cue_latched()` is the one cue that exists purely to answer a question the
+screen cannot answer fast enough. A tap and a short hold begin identically,
+and the screen only redraws every five seconds once latched, so without a
+sound there is no way to tell a recording that is still running from one that
+stopped the moment the finger lifted.
 
 On screen the state progresses through plain verbs: "Listening 0:07" with a
 level meter, then "Transcribing", then "Cleaning up" when that is enabled,
@@ -300,14 +321,37 @@ Three buttons and one gesture, no chords.
 
 | Input | Action |
 | --- | --- |
-| Hold the side button | Record. Recording starts on the press itself, not after a long-press threshold, so the microphone is live with no delay. |
-| Release the side button | Stop and run the pipeline. A clip under 300 ms is discarded as a fumble. |
+| Hold the side button | Record. Recording starts on the press itself, not after a long-press threshold, so the microphone is live with no delay. The first fifth of a second is dropped rather than kept, because that is the start cue sounding and the microphone hears it. |
+| Release the side button | Stop and run the pipeline, when the press lasted past 500 ms. A clip under 300 ms is discarded as a fumble. |
+| Tap the side button | Latch. Released inside 500 ms the recording keeps running with no hand on it, until the button is tapped again. |
+| Tap it again | Stop and run the pipeline. Within 1.2 s of the first tap it discards instead, which is how a fumble is taken back. |
+| Hold Up 3 s while latched | Abandon the recording. Nothing is saved. |
 | Swipe up on the glass | Show the next screen of a long note. |
 | Swipe down on the glass | Show the previous screen. |
 | Press Up | Scroll back through a long note. At the top it opens the info screen instead. |
 | Hold Up 3 s | Power off. The panel keeps a "Powered off" page telling you to hold the side button to come back. |
 | Press Down | Scroll on. After a failure it retries the failed stage instead. |
 | Hold Down 3 s | Enter setup mode, or restart when already in it. |
+
+The side button carries both gestures rather than a setting choosing between
+them, because a setting would mean picking one and living with it, and the
+two suit different notes: a sentence is a hold, a paragraph is a tap. Nothing
+has to be configured and nothing has to be learned to keep the old behaviour.
+
+The 500 ms threshold is measured from the button event, not from the start of
+the record loop, which begins a good quarter second later behind the
+microphone settling and the start cue. Measuring from the loop would read a
+700 ms hold as a tap.
+
+Cancelling is the hold on Up rather than the click, because the click is how
+the previous note is scrolled and someone reaching for that must not throw
+away what is being recorded. Power off is unreachable during a recording
+anyway, so the hold is free to mean this.
+
+A latched recording stops itself after ten minutes. Nothing physical ends
+one, so without a ceiling a press in a pocket would record and upload until
+the battery was flat. A held recording needs no ceiling because the hand is
+the limit.
 
 Up and Down were meant to stop scrolling once the swipe took over, freeing
 them for something else. They still scroll, because no unit has yet been seen
@@ -319,8 +363,9 @@ them and names the condition for taking them out.
 
 Power off lives on Up for a hardware reason, not a design one: the side
 button cannot carry a long press at all, because holding it is how recording
-works, and the release drain at the end of `record_and_process()` swallows
-anything queued behind it. `docs/hardware.md` has the full account.
+works. `record_loop()` reads the raw GPIO level rather than the event queue
+for exactly that reason, so a release registers even while a panel refresh
+has the pipeline task blocked. `docs/hardware.md` has the full account.
 
 ### The swipe
 
@@ -356,6 +401,11 @@ Waking from deep sleep is the exception, and the reason the distinction
 exists. There the hold *is* the recording, so the microphone is live
 immediately and "pick up and speak" survives the idle timeout. `pipeline.cpp`
 tells the two apart by the wake cause, not by the button.
+
+A wake recording cannot latch, and `record_and_process()` is told so. The
+button has been held right through boot, so the release that follows says
+nothing about how long it was down, and every wake press would latch a
+recording nobody asked for.
 
 ### The info screen
 
@@ -427,18 +477,55 @@ Small choices that were made deliberately.
 - A failure puts the stage in the title and the reason plus "Press Down to
   retry." in the caption, so the screen says both what broke and what to do.
 
+## The transcript arrives while you are still talking
+
+The note is still drawn once *after* it is saved, but during a recording the
+body now fills in as each segment comes back, a few seconds behind your voice.
+That is the point of segmenting: without it the feature is invisible and the
+device looks like it is doing nothing for minutes at a time.
+
+This does not cost a refresh. The level meter already forces a partial refresh
+every second while recording, so the transcript rides one that was happening
+anyway, and `set_note(text, tail)` pins the view to the newest words rather
+than the top. The rule below about drawing the note once still holds, because
+it was always about not *adding* refreshes to the path between releasing the
+button and reading the note.
+
+Only the last 1500 bytes are handed to the screen. Nothing else could be seen,
+and `layout_note()` wraps the whole note once per face to size it, which on a
+ten minute recording would mean re-wrapping thousands of characters four times
+a second on the task that also runs the silence detector.
+
+What is on screen mid-recording is the raw transcript. Cleanup runs once at
+the end, over the whole note, so the text visibly tidies itself when the note
+is saved. Abandoning a recording puts the previous note back, and so does "No
+speech detected", because neither of those saved anything.
+
 ## Failure is part of the design
 
 Nothing a person said out loud should ever be lost to a transient error.
 
-- The recorded audio stays in PSRAM after a failure, so a failed
-  transcription retries without speaking again.
+- Transcribed text is kept, and audio that has not yet been transcribed stays
+  in PSRAM, so a failed transcription retries only the part that failed.
+  Audio that has already become text is released, which is what lets a
+  recording run past ninety seconds at all.
 - A failed save retries from the text, so the upload does not repeat.
 - A failed cleanup saves the raw transcript rather than discarding the note,
   and says so in the caption. It is not a failed note, so it has no retry
   stage of its own.
+- A segment that fails twice stops holding the note hostage. The second time
+  through the retry, whatever did transcribe is saved and the caption says
+  how many parts are missing. Withholding nine good minutes over one bad
+  segment is the worse failure, and a ten-minute recording makes it possible
+  in a way a ninety-second one never did.
 - The last saved note is kept in NVS, so it is still on screen after a reboot
-  or a wake from deep sleep.
+  or a wake from deep sleep. NVS caps a string near 4 KB, so a long note is
+  cut at a code point boundary for that copy alone; the vault has all of it.
+
+Segments are released strictly oldest first, because a ring can only free
+from its tail. That is why a failed segment stops the uploader rather than
+letting it carry on: nothing behind the failure could be freed anyway, and
+the backlog absorbs the rest of the recording until the drain retries it.
 
 ## What e-ink makes you design differently
 
