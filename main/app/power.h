@@ -20,9 +20,10 @@ void note_activity();
 bool idle_expired(int idle_minutes);
 
 // DEEP SLEEPER
-// Stops Wi-Fi, holds the latch and peripheral-enable pins, arms the AI
-// button as EXT1 wake, and sleeps. The caller must have rendered the screen
-// and put the panel to sleep first. Does not return.
+// Stops Wi-Fi, holds the latch and peripheral-enable pins, arms the AI button
+// as EXT1 wake and the USB power pin as EXT0, and sleeps. The caller must
+// have rendered the screen and put the panel to sleep first. Does not
+// return.
 [[noreturn]] void deep_sleep();
 
 }  // namespace power

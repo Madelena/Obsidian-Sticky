@@ -28,4 +28,10 @@ i2c_master_bus_handle_t sensor_i2c_bus();
 // Returns true when this boot was a deep-sleep wake from the AI button.
 bool woke_from_button();
 
+// CABLE WAKE CHECKER
+// Returns true when this boot was a deep-sleep wake from the USB power pin
+// changing, which means the cable moved while the sleep screen was up and
+// only the status bar needs redrawing. See pipeline.cpp run().
+bool woke_from_power();
+
 }  // namespace board

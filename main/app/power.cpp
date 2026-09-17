@@ -78,9 +78,23 @@ bool idle_expired(int idle_minutes)
     gpio_pulldown_dis(wake);
     gpio_hold_en(wake);
     esp_sleep_enable_ext1_wakeup_io(1ULL << PIN_POWER_BTN, ESP_EXT1_WAKEUP_ANY_LOW);
+
+    // The cable moving is worth waking for, because the sleep screen shows a
+    // power icon and the panel holds that picture for days. EXT1 cannot carry
+    // it: the S3 has no per-pin wake level, and the button wakes on low while
+    // USB present is high. EXT0 is a separate source and takes its own level,
+    // at the cost of keeping the RTC peripherals powered through sleep.
+    //
+    // Arming the level the pin is not at right now is what makes it a change
+    // detector rather than a latch, and is why waking does not immediately
+    // wake again: the next sleep arms the opposite level.
+    const int usb_now = gpio_get_level(static_cast<gpio_num_t>(PIN_EXTERNAL_POWER));
+    const esp_err_t cable = esp_sleep_enable_ext0_wakeup(
+        static_cast<gpio_num_t>(PIN_EXTERNAL_POWER), usb_now == 0 ? 1 : 0);
     gpio_deep_sleep_hold_en();
 
-    ESP_LOGI(kTag, "Deep sleep, wake on GPIO%d low", PIN_POWER_BTN);
+    ESP_LOGI(kTag, "Deep sleep, wake on GPIO%d low or GPIO%d %s (%s)", PIN_POWER_BTN,
+             PIN_EXTERNAL_POWER, usb_now == 0 ? "high" : "low", esp_err_to_name(cable));
     std::fflush(stdout);
     vTaskDelay(pdMS_TO_TICKS(50));
     esp_deep_sleep_start();

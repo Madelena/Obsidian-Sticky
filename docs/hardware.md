@@ -191,6 +191,24 @@ handle from it.
 - Wake source is EXT1 on `PIN_POWER_BTN` (GPIO4), `ESP_EXT1_WAKEUP_ANY_LOW`,
   with the pin set to input, pull-up enabled, pull-down disabled, and then
   held.
+- The cable is a second wake source, EXT0 on `PIN_EXTERNAL_POWER` (GPIO9), so
+  that plugging in or pulling out updates the power mark on a sleep screen the
+  panel may hold for days. It has to be EXT0 and not a second EXT1 pin:
+  `SOC_PM_SUPPORT_EXT1_WAKEUP_MODE_PER_PIN` is not defined for the ESP32-S3,
+  so every EXT1 pin shares one level, and the button wakes on low while USB
+  present is high.
+- `power::deep_sleep()` arms EXT0 at the level the pin is **not** at when it
+  sleeps. That is what makes it a change detector rather than a latch, and it
+  is why the wake does not loop: the sleep that follows arms the other level.
+- EXT0 costs power. `esp_sleep_enable_ext0_wakeup()` "will work only if RTC
+  peripherals are kept on during sleep", so the RTC domain now stays powered
+  through every deep sleep, including a sleep on battery with no cable in.
+  This has not been measured on this board. If sleeping draw matters more than
+  the mark being current, arming EXT0 only when the cable is already in gives
+  the power back and keeps the unplug case.
+- `board::woke_from_power()` reports an EXT0 wake, and `pipeline::run()` takes
+  it straight back to `go_to_sleep()`: the picture is one icon out of date and
+  bringing the radio up would cost more than the picture is worth.
 - The button must already be released before entering sleep, or the device
   wakes again immediately on the level that is still asserted.
 - `power::deep_sleep()` holds this set of pins through sleep, listed here
@@ -204,7 +222,8 @@ handle from it.
   or it stays stuck at its sleep level forever.
 - `board::woke_from_button()` reports whether the wake cause was EXT1, which
   is what lets `pipeline` start recording immediately when the user wakes the
-  device by holding the side button down.
+  device by holding the side button down. It stays correct now that EXT0 also
+  wakes, because the two causes are distinct.
 
 ## Learned by experiment
 

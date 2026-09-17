@@ -62,6 +62,12 @@ bool woke_from_button()
 }
 
 
+bool woke_from_power()
+{
+    return esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT0;
+}
+
+
 esp_err_t init()
 {
     // After deep sleep the latch pins are still held high; preload the same

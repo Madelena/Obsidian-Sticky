@@ -879,6 +879,13 @@ void run(void *)
     // gauge that has never been read.
     battery::poll();
 
+    // The cable moved while the panel was holding the sleep screen. Redraw the
+    // bar and go straight back down: nothing else about the device changed,
+    // and bringing the radio up would cost more than the picture is worth.
+    if (board::woke_from_power()) {
+        go_to_sleep();
+    }
+
     const bool wake_recording = board::woke_from_button() && input::ai_pressed();
     if (!settings::wifi_configured()) {
         enter_setup();
