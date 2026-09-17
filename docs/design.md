@@ -30,19 +30,23 @@ constants are at the top of `main/ui/screen.cpp`.
 
 | Band | Geometry | Carries |
 | --- | --- | --- |
-| Body | y 27 to 17 down to y 412, the top depending on the face, the bottom on the caption | The note, wrapped, and a position bar in the right margin when it overflows |
-| Caption | One 22 px line at y 381, hidden when empty | A failure reason, or a note that the raw text was saved |
-| Status | One 30 px line at y 424, clearing the bottom edge by 18 px, no rule over it | The state, left, as a word in bold 30 px or nothing at all. Three 34 px icon slots, right |
+| Body | y 28 to 20 down to y 406, the top depending on the face, the bottom on the caption | The note, wrapped, and a position bar in the right margin when it overflows |
+| Caption | One 22 px line at y 375, hidden when empty | A failure reason, or a note that the raw text was saved |
+| Status | One 30 px line at y 418, clearing the bottom edge by 24 px, no rule over it | The state, left, as a word in bold 30 px or nothing at all. The marks, right, packed against the margin: the cell in a 52 px box, the rest in 34 px ones |
 
 Margins are 36 px on the top, left and right alike, and the note keeps 12 px
 clear of the bar below it. The head margin is measured to the ink and not to
 the glyph box, so the y the note is drawn at moves with the face, from 27 for
 the smallest to 17 for the largest; `docs/hardware.md` has the arithmetic.
 
-The bar clears the bottom edge by 18 px, half the note's margin, because it is
-chrome and should sit tighter than the thing it describes. It has no height of
-its own: `bar_top()` places the one line of 30 px bold by that bottom margin
-and everything else in the bar centers on it. The band it used to be was a
+The bar clears the bottom edge by 24 px, two thirds of the note's margin,
+because it is chrome and should sit tighter than the thing it describes. It
+was 18 px, which put the marks closer to the edge than the note ever comes to
+the sides and read as though the bar were falling off the page. 24 px is as
+far as it can rise: the 52 px face gives up its fifth line at 25, and
+`docs/hardware.md` has that arithmetic. It has no height of its own:
+`bar_top()` places the one line of 30 px bold by that bottom margin and
+everything else in the bar centers on it. The band it used to be was a
 leftover from the rule that closed it, and sizing one cost the note 7 px for
 nothing. While recording, the right side of the status band is replaced by a level
 meter. A caption costs the body one line by pulling `body_bottom()` up; an
@@ -496,7 +500,7 @@ serve DHCP names in local DNS.
 
 There is no rule under the heading. The heading is 40 px bold against 30 px
 regular below it, and a step that size separates the two without a line. The
-version stamp at the foot takes the same 18 px bottom margin as the status bar
+version stamp at the foot takes the same 24 px bottom margin as the status bar
 on the note page, being the same thing: one line of chrome on the floor.
 
 Keep the paragraphs in their order. The page truncates at the bottom to

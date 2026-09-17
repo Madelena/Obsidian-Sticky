@@ -24,7 +24,10 @@ namespace screen {
 namespace {
 
 constexpr int kMargin = 36;      // Every margin of the note, on three sides
-constexpr int kBarMargin = 18;    // Half of it, under the bar, which is chrome
+// Chrome, so it sits tighter than the note's 36. Do not raise it further: 24
+// is the most the note can give up before the 52 px face loses a line to a
+// caption.
+constexpr int kBarMargin = 24;
 constexpr int kBlockGap = 6;
 constexpr int kEdgeGap = 12;      // Clearance between the note and the bar
 // Titled pages: the info screen, setup mode and the fatal ones. They are not

@@ -283,7 +283,7 @@ fits = (bottom - top - face.height) / pitch + 1
 Pitch is the distance to the *next* line, so only the lines before the last
 one need it. That is what fits a fifth 52 px line into the same space. `top`
 is per face rather than fixed, for the reason in the next section, and
-`bottom` is y 412, which is 12 px above the status bar.
+`bottom` is y 406, which is 12 px above the status bar.
 
 | Face | Called | Glyph box | Cap gap | Draw top | Pitch | Lines |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -305,16 +305,20 @@ Spare pixels under a full page, worst case across the five families:
 
 | Face | Box | Pitch | Lines | Drawn from | Spare |
 | --- | --- | --- | --- | --- | --- |
-| 30 px | 38 | 42 | 9 | y 28 | 10 |
-| 40 px | 50 | 54 | 7 | y 26 | 12 |
-| 52 px | 66 | 70 | 5 | y 23 | 43 |
-| 64 px | 82 | 86 | 4 | y 20 | 52 |
+| 30 px | 38 | 42 | 9 | y 28 | 4 |
+| 40 px | 50 | 54 | 7 | y 26 | 6 |
+| 52 px | 66 | 70 | 5 | y 23 | 37 |
+| 64 px | 82 | 86 | 4 | y 20 | 46 |
 
-The 30 px face is the binding one at 10 px, so anything that lowers `bottom`
-by more than that costs it a line and `auto` falls through a note sooner. The
-spare varies by a pixel between families, because a family whose capitals land
-a pixel short of the target gets a pixel more head margin; the column is the
-worst of the five.
+The 30 px face is the binding one at 4 px, so anything that lowers `bottom` by
+more than that costs it a line and `auto` falls through a note sooner. It had
+10 px until the status bar rose 6 px to even up the bottom margin, and 6 px was
+the whole of what was going spare: at 7 px the 52 px face loses its fifth line
+whenever a caption is showing.
+
+The spare varies by a pixel between families, because a family whose capitals
+land a pixel short of the target gets a pixel more head margin; the column is
+the worst of the five.
 
 ### The head margin is set per face, because a glyph box is not its ink
 
