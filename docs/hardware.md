@@ -285,12 +285,17 @@ one need it. That is what fits a fifth 52 px line into the same space. `top`
 is per face rather than fixed, for the reason in the next section, and
 `bottom` is y 412, which is 12 px above the status bar.
 
-| Face | Nominal | Glyph box | Cap gap | Draw top | Pitch | Lines |
+| Face | Called | Glyph box | Cap gap | Draw top | Pitch | Lines |
 | --- | --- | --- | --- | --- | --- | --- |
-| `body` (small) | 30 px | 38 px | 9 px | y 27 | 42 px | 9 |
-| `large` (medium) | 40 px | 50 px | 11 px | y 25 | 55 px | 7 |
-| `xlarge` (large) | 52 px | 66 px | 16 px | y 20 | 73 px | 5 |
-| `xxlarge` (xlarge) | 64 px | 80 px | 19 px | y 17 | 88 px | 4 |
+| `body` (small) | 30 px | 38 px | 8 px | y 28 | 42 px | 9 |
+| `large` (medium) | 40 px | 50 px | 10 px | y 26 | 54 px | 7 |
+| `xlarge` (large) | 52 px | 66 px | 13 px | y 23 | 70 px | 5 |
+| `xxlarge` (xlarge) | 64 px | 82 px | 16 px | y 20 | 86 px | 4 |
+
+The cap gap and draw top above are Inter's. Another family lands within a
+pixel of them, which is what the `FACES` table in `tools/gen_font.py` is for,
+and the px name is the face's nickname rather than a size anything is baked
+at.
 
 The pitch and the glyph box are fixed numbers per face in the `FACES` table of
 `tools/gen_font.py`, the same for every family, which is why the figures below
